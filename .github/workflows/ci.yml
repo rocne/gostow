@@ -41,8 +41,24 @@ jobs:
               ;;
           esac
 
+  # The hermetic suite, on every platform we ship a binary for.
+  #
+  # GoReleaser builds linux+darwin x amd64+arm64, and until now CI only ever ran
+  # linux/amd64: three of the four artefacts were published untested. That is not
+  # a theoretical gap. The engine canonicalises paths with filepath.EvalSymlinks,
+  # and on macOS /tmp is itself a symlink to /private/tmp — precisely the kind of
+  # difference a symlink farm notices and a linux runner never sees.
+  #
+  # macos-latest is arm64 and ubuntu-24.04-arm is linux/arm64, so both axes are
+  # exercised without a fourth runner. fail-fast is off: a darwin failure must
+  # not hide a linux one.
   test:
-    runs-on: ubuntu-latest
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
     steps:
       - uses: actions/checkout@v6
 
