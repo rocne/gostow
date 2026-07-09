@@ -27,6 +27,16 @@ func AssertSameAsOracle(t *testing.T, c Case) {
 		t.Fatalf("materialize gostow sandbox: %v", err)
 	}
 
+	for _, root := range []string{oracleRoot, gostowRoot} {
+		if c.Pre == nil {
+			continue
+		}
+		pre := RunBinary(oracle, c.Pre, c.environ(root), filepath.Join(root, c.Cwd))
+		if pre.ExitCode != 0 {
+			t.Fatalf("pre-stow in %s failed (%d): %s", root, pre.ExitCode, pre.Stderr)
+		}
+	}
+
 	oRun := runIn(t, oracle, c, oracleRoot)
 	gRun := runIn(t, gostow, c, gostowRoot)
 

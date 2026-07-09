@@ -659,14 +659,29 @@ See PL-15 for the `$`-vs-newline divergence.
 
 All ledger items are now ruled. What remains:
 
-- `chkstow` — stow ships a second binary. Out of scope for v1? Needs a decision.
-- `--compat` unstow semantics are characterised from source but **not yet discriminated by
-  a probe**; the obvious test (rename a file in the package, then unstow) produced identical
-  output in both modes. A proper discriminating fixture is required before implementing.
-- **PL-15** (`$` before a trailing newline in Perl vs RE2) is ledgered but its ruling is
-  deferred to the ignore-matcher implementation, as planned.
+- **Verbosity ≥3 output** is not implemented. PL-11 owes only *semantic* equivalence there,
+  but the guarantee's testable form — that the level-0–2 subsequence matches byte-for-byte
+  at any verbosity — is not yet enforced by a test.
+- **Port `ignore.t`** (287 assertions). The matcher is implemented and differentially
+  tested, but stow's own suite encodes *intent*, and would catch a case where gostow and
+  stow agree because gostow copied a misreading.
 
 ### Settled (2026-07-09)
+
+- **`chkstow` is out of scope for v1.** The parity mandate is owed by the `stow` command:
+  its flags, its output, its symlink farm. `chkstow` is a *different program* with its own
+  CLI, sharing no code path with the engine, consumed neither by dstow nor by any `.stowrc`
+  or script that drives `stow`. Shipping it would be cargo-culting the tarball's contents
+  rather than serving an install. Revisit if a real use appears.
+- **`--compat` now has a discriminating fixture.** Rename a package file and leave the old
+  target link dangling: both modes end with the same tree, but walking the *package* tree
+  never visits the stale link (it is swept up afterwards by `cleanup_invalid_links`) while
+  walking the *target* tree finds it directly and reports it as an invalid link into a stow
+  directory. compat never runs `cleanup_invalid_links` at all.
+- **PL-04 is pinned by a test**, and is worse than first recorded: stowing `dot-foo` into a
+  `.stow`-marked `.foo` not only bypasses the protection, it *creates* `.foo/bar` — which
+  the matching unstow then refuses to remove, stranding the file permanently.
+- **PL-15** ruled during the ignore-matcher implementation: keep RE2 semantics.
 
 - **PL-18** probed and ruled: `$HOME` is interpolated into a regex unescaped, so a home
   directory containing a regex metacharacter crashes real stow at any verbosity. Not

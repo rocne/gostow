@@ -141,7 +141,7 @@ Port priority, highest value first:
    `defer.t` (4) — direct S3 unit tests.
 6. `cli.t` (3), `cli_options.t` (10) — thin; the differential harness covers more.
 7. `examples.t` (10) — the manual's worked examples. Good end-to-end sanity.
-8. `chkstow.t` (7) — only if `chkstow` ships (open question, SPEC §12).
+8. ~~`chkstow.t`~~ — `chkstow` is ruled out of scope for v1 (SPEC §12).
 
 Ports are Go tests, not Perl. They are a *source of cases*, not a suite to run.
 
@@ -168,8 +168,8 @@ oracle keeps disproving. Each slice is a tracer bullet whose result informs the 
 | 10 | `--dotfiles` translation | S1 | ✅ **done** — incl. the `dot-`, `dot-.x`, `dot--x` edge cases |
 | 11 | `.stowrc` discovery, merge, expansion | S2 | ✅ **done** — incl. PL-01 (home-then-cwd) |
 | 12 | `--adopt`, `--defer`, `--override` | S1 | ✅ **done** |
-| 13 | `--compat` unstow | S1 | implemented; **a discriminating fixture is still owed** (SPEC §12) |
-| 14 | `.stow` / `.nonstow` protection | S1 | implemented; **the PL-04 asymmetry fixture is still owed** |
+| 13 | `--compat` unstow | S1 | ✅ **done** — discriminating fixture found (SPEC §12) |
+| 14 | `.stow` / `.nonstow` protection | S1 | ✅ **done** — incl. the PL-04 asymmetry |
 
 Slice 3 is load-bearing and easy to underestimate: `pflag`/`cobra` cannot express stow's
 option semantics (§4.1 of the spec), so `internal/getopt` is real work with its own unit

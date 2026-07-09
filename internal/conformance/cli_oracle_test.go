@@ -188,10 +188,50 @@ func TestCLIAgainstOracle(t *testing.T) {
 		},
 
 		// --- --compat ---------------------------------------------------------
+		//
+		// A discriminating fixture (SPEC §12 owed one). The package's file was
+		// renamed f -> g, leaving target/f dangling into the package. Both modes
+		// end with the same tree, so only the level-2 log tells them apart:
+		// walking the *package* tree never visits f, and it is instead swept up
+		// afterwards by cleanup_invalid_links; walking the *target* tree finds f
+		// directly and calls it an invalid link into a stow directory. compat
+		// never runs cleanup_invalid_links at all.
 		{
-			Name: "--compat unstow walks the target tree",
+			Name:   "unstow walks the package tree",
+			Stow:   Tree{"pkg/g": F("g")},
+			Target: Tree{"f": L("../stow/pkg/f")},
+			Args:   args("-vv", "-D", "pkg"),
+		},
+		{
+			Name:   "--compat unstow walks the target tree instead",
+			Stow:   Tree{"pkg/g": F("g")},
+			Target: Tree{"f": L("../stow/pkg/f")},
+			Args:   args("-vv", "-p", "-D", "pkg"),
+		},
+		{
+			Name: "--compat unstow of a plain package",
 			Stow: Tree{"pkg/f": F("x")},
 			Args: args("-v", "-p", "-D", "pkg"),
+		},
+
+		// --- ledger PL-04: the protection asymmetry ---------------------------
+		//
+		// stow_contents passes the *package* subdir to should_skip_target while
+		// unstow_contents passes the *target* subdir. Under --dotfiles those are
+		// different names, so stowing into a .stow-marked directory silently
+		// bypasses the protection that unstowing honours. Replicated for v1.
+		{
+			Name:   "PL-04: --dotfiles bypasses .stow protection when stowing",
+			Stow:   Tree{"pkg/dot-foo/bar": F("x")},
+			Target: Tree{".foo/.stow": F("")},
+			Args:   args("-v", "--dotfiles", "pkg"),
+		},
+		{
+			Name:   "PL-04: unstowing the same tree honours the protection",
+			Stow:   Tree{"pkg/dot-foo/bar": F("x")},
+			Target: Tree{".foo/.stow": F("")},
+			Pre:    []string{"-d", "stow", "-t", "target", "--dotfiles", "pkg"},
+			Args:   args("-v", "--dotfiles", "-D", "pkg"),
 		},
 
 		// --- STOW_DIR --------------------------------------------------------
