@@ -166,14 +166,12 @@ Still owed before v1:
 - **Verbosity ≥3 output** is not implemented. PL-11 owes only *semantic* equivalence
   there, but gostow currently emits a subset of the trace lines. Decide what "semantic
   equivalence" is tested as, then implement.
-- **A discriminating `--compat` fixture.** The code path exists and is exercised, but no
-  test yet distinguishes compat from non-compat unstow (SPEC §12).
-- **The PL-04 asymmetry fixture** (`dot-foo` → `.foo` marked `.stow`): the protection
-  bypass is replicated in code but not pinned by a test.
 - **Port `ignore.t`** (287 assertions). The matcher is implemented and differentially
   tested, but stow's own suite encodes *intent* and would catch a shared misreading.
-- **`chkstow`** — stow ships a second binary. In or out of scope? Undecided (SPEC §12).
 - Upstream bug reports: PL-01, PL-03, PL-04, PL-05, PL-06, PL-08, PL-09, PL-10, PL-18.
+
+`chkstow` is ruled **out of scope for v1** (SPEC §12). `--compat` and the PL-04
+protection asymmetry are both pinned by differential fixtures.
 
 **Do not tag v1 without a human decision.** The four pre-1.0 guards stay standing until
 then; release-please's standing PR (#2) is deliberately left open.

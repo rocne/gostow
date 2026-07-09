@@ -29,6 +29,11 @@ type Case struct {
 	HomeRc string
 	Cwd    string
 
+	// Pre is an argv run with the *oracle* in both sandboxes before the measured
+	// invocation, to build an already-stowed starting state. Hand-writing those
+	// symlinks would be hand-writing the thing under test.
+	Pre []string
+
 	// FatalExitDiverges marks a case where stow's fatal exit status is
 	// errno-derived and therefore undefined (ledger PL-07). stdout, stderr and
 	// the tree are still compared byte-for-byte; only the status is exempt, and
