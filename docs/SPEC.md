@@ -515,6 +515,43 @@ Usage errors: `stow: <message>` on stderr followed by a **blank line**, then the
 block on **stdout**. A parse failure calls `usage('')`: the empty message prints nothing, but
 still exits 1. **[probed]**
 
+### 8.35 The `--gostow-` extension convention
+
+gostow adds nothing to stow's option namespace. Anything gostow invents is prefixed
+`--gostow-`, and three rules keep the parity mandate intact:
+
+1. **Hidden from `--help`**, whose bytes are a contract (§4.4). `--gostow-help` prints them.
+2. **Never abbreviated.** Extension options are `NoAbbrev` in `internal/getopt`, so they are
+   absent from prefix matching *and* from ambiguity lists. `--g` therefore remains
+   `Unknown option: g`, exactly as in real stow. Without this, adding an extension would
+   silently redefine an abbreviation and change how existing argv parses.
+3. **Forbidden in the parity suite.** `AssertSameAsOracle` fails loudly on a fixture whose
+   argv contains `--gostow-`; a parity fixture must be argv real stow could have been given.
+
+The consequence, and the reason the convention is safe: **for any command line that does not
+literally contain `--gostow-`, gostow is GNU Stow.**
+
+The only extension today is `--gostow-fix`, the CLI face of `stow.Options.FixQuirks`.
+
+### 8.36 `FixQuirks` — the library seam
+
+`FixQuirks` (default false) abandons parity in a small, enumerated set of places where
+stow's behaviour is a defect rather than a contract. It exists for consumers building *on*
+the engine rather than replacing stow. Its scope is exactly:
+
+| Ledger | Default (parity) | `FixQuirks` |
+|---|---|---|
+| PL-04 | `stow_contents` guards the *package* subdir, so `--dotfiles` bypasses `.stow` protection when stowing | guards the *target* subdir, as `unstow_contents` already does |
+| PL-03 | `stow -- pkg` discards `pkg` | the arguments after `--` are package names |
+| PL-02 | `.stowrc` has no comment syntax; an option-shaped word after `#` is silently honoured | `#` begins a comment, `\#` is a literal `#` |
+| PL-05 | `RMDIR <dir>`, no colon | `RMDIR: <dir>` |
+
+It deliberately does **not** touch PL-13 or PL-14, stow's two documented algorithmic bugs.
+Those are work, not a flag. Nor does it touch anything in §2's tier-2 list, which gostow
+never reproduces in the first place.
+
+User-facing prose lives in `docs/DIVERGENCES.md`.
+
 ### 8.4 Colour (the sole additive liberty)
 
 Colour is emitted **only** when the relevant stream is a TTY, and never changes byte content
@@ -567,7 +604,7 @@ table is a deliverable in its own right.
 | PL-02 | `.stowrc` has no comment syntax. `#` and following words are parsed as package names and silently discarded, so comments "work" by accident. | probed | 3 | **Replicate.** Ledger; consider upstream request for real comment support. |
 | PL-03 | `stow -- pkg` discards `pkg` (Getopt leaves it in the unread array) and fails with `No packages to stow or unstow`, exit 1. | probed | 3 | **Replicate.** Fails loudly and identically; no silent corruption. Revisit post-v1. Report upstream. |
 | PL-04 | `stow_contents` passes the **package** subdir to `should_skip_target`, while `unstow_contents` passes the **target** subdir. Under `--dotfiles` these differ, so stowing **bypasses `.stow`/`.nonstow` protection** that unstowing honours. | probed (discriminating case: pkg `dot-foo` → target `.foo` marked with `.stow`) | 3 | **Replicate for v1.** Real protection bypass — **report upstream**; strong candidate for post-v1 divergence. |
-| PL-05 | `RMDIR <dir>` printed without a colon; `LINK:`/`UNLINK:`/`MKDIR:`/`MV:` all have one. | probed | 1 | **Replicate.** Report upstream. |
+| PL-05 | `RMDIR <dir>` printed without a colon; `LINK:`/`UNLINK:`/`MKDIR:`/`MV:` all have one. | probed | 1 | **Replicate**, and declare it: the engine has one operation table and one printer, where the missing colon is a `colon: false` field rather than a format string that reads as a typo. `FixQuirks` restores it. Report upstream. |
 | PL-06 | `do_rmdir` reads `$self->{link_task_for}{$dir}` inside its `dir_task_for` branch → undef deref (crash); its "reverts" branch prints `MKDIR`, not `RMDIR`, and mutates the wrong table. | **probed (2026-07-09): unreachable** | 2 | **RULED: do not replicate — nothing to replicate.** The branch is dead code. `do_rmdir` is called only from `fold_tree`, only during `plan_unstow`, which wholly precedes `plan_stow`; `dir_task_for{$dir}` is therefore never set when it runs, and a directory can be folded at most once (after the first fold, `foldable` finds no links and returns early). Neither the crash nor the mislabelled `MKDIR (reverts)` can be reached from the CLI. gostow simply omits the branch. Report upstream. |
 | PL-07 | Fatal exit status is errno-derived (2 after a failed stat, 255 on a clean `die`). | probed | 2 | **Do not replicate.** Pin fatal = 2. |
 | PL-08 | `do_unlink` guards with `$self->{dir_task_for}{$file} eq 'create'` — comparing a hashref to a string. Always false; dead code. | source | 2 | **Do not replicate.** Implement the intended guard. Report upstream. |

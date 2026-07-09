@@ -214,3 +214,61 @@ func TestMissingPackageIsFatal(t *testing.T) {
 		t.Errorf("message = %q, want %q", fe.Msg, want)
 	}
 }
+
+// The one place GNU Stow's mistake is shaped into this code. stow asks
+// should_skip_target about the *package* subdir when stowing, but the *target*
+// subdir when unstowing. Under --dotfiles those are different names, so stowing
+// walks past a .stow guard that unstowing respects — creating files inside a
+// protected directory that the matching unstow then refuses to remove.
+//
+// Reproduced by default. FixQuirks asks the right question.
+func TestDotfilesProtectionBypass(t *testing.T) {
+	build := func(t *testing.T) string {
+		root := sandbox(t)
+		write(t, filepath.Join(root, "stow/pkg/dot-foo/bar"), "x")
+		write(t, filepath.Join(root, "target/.foo/.stow"), "")
+		return root
+	}
+
+	root := build(t)
+	o := opts(root)
+	o.Dotfiles = true
+	if _, err := Stow(o, "pkg"); err != nil {
+		t.Fatalf("Stow: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(root, "target/.foo/bar")); err != nil {
+		t.Error("parity requires reproducing the bypass: stow does create .foo/bar here")
+	}
+
+	root = build(t)
+	o = opts(root)
+	o.Dotfiles = true
+	o.FixQuirks = true
+	if _, err := Stow(o, "pkg"); err != nil {
+		t.Fatalf("Stow: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(root, "target/.foo/bar")); !os.IsNotExist(err) {
+		t.Error("FixQuirks must honour the .stow guard when stowing, as unstowing already does")
+	}
+}
+
+// FixQuirks changes nothing about an ordinary run: it is a lever for a small,
+// enumerated set of defects, not a different engine.
+func TestFixQuirksDoesNotDisturbOrdinaryStowing(t *testing.T) {
+	for _, fix := range []bool{false, true} {
+		root := sandbox(t)
+		write(t, filepath.Join(root, "stow/pkg/sub/a"), "a")
+		o := opts(root)
+		o.FixQuirks = fix
+		if _, err := Stow(o, "pkg"); err != nil {
+			t.Fatalf("FixQuirks=%v: %v", fix, err)
+		}
+		dest, err := os.Readlink(filepath.Join(root, "target/sub"))
+		if err != nil {
+			t.Fatalf("FixQuirks=%v: readlink: %v", fix, err)
+		}
+		if want := "../stow/pkg/sub"; dest != want {
+			t.Errorf("FixQuirks=%v: link = %q, want %q", fix, dest, want)
+		}
+	}
+}

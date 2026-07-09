@@ -62,3 +62,24 @@ Stow home page: <http://www.gnu.org/software/stow/>
 General help using GNU software: <http://www.gnu.org/gethelp/>
 `, prog)
 }
+
+// extensionHelp documents gostow's own flags, which cannot appear in --help
+// because that block's bytes are part of the parity contract (§8.4). Every such
+// flag is prefixed "gostow-" and answers only to its exact name, never to an
+// abbreviation — so no argv that real stow accepts is parsed differently here.
+func extensionHelp(version string) string {
+	return IdentityLine(version) + `
+
+GOSTOW EXTENSIONS:
+
+These flags do not exist in GNU Stow. They are hidden from --help, which is
+reproduced byte-for-byte, and they cannot be abbreviated.
+
+    --gostow-fix          Fix GNU Stow's known defects instead of reproducing
+                          them. See docs/DIVERGENCES.md for the exact list.
+    --gostow-help         Show this help
+
+Without --gostow-fix, gostow is GNU Stow 2.4.1: same output, same exit codes,
+same symlinks, bugs included.
+`
+}
