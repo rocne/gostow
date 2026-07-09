@@ -19,30 +19,99 @@ $ gostow -R vim            # restow
 
 ## Install
 
-Download a binary for linux or macOS (amd64 or arm64) from the
-[releases page](https://github.com/rocne/gostow/releases), or build from source:
+Packages are published for linux and macOS on amd64 and arm64. Every method below installs
+the binary as **`gostow`**; see [Using it as a drop-in](#using-it-as-a-drop-in) to make it
+answer to `stow`.
+
+### macOS — Homebrew
 
 ```console
+$ brew install --cask rocne/tap/gostow
+```
+
+It is a cask, so this is macOS only — Homebrew on Linux does not install casks. Use the
+tarball or `go install` there.
+
+### Debian, Ubuntu — apt
+
+```console
+$ curl -1sLf https://dl.cloudsmith.io/public/rocne/releases/setup.deb.sh | sudo -E bash
+$ sudo apt-get update && sudo apt-get install -y gostow
+```
+
+### Fedora, RHEL — dnf
+
+```console
+$ curl -1sLf https://dl.cloudsmith.io/public/rocne/releases/setup.rpm.sh | sudo -E bash
+$ sudo dnf install -y gostow
+```
+
+Both setup scripts add the public [`rocne/releases`](https://cloudsmith.io/~rocne/repos/releases/)
+repository and import its signing key. Packages are GPG-signed, and so is the repository
+index. If you would rather not pipe a script into a root shell, download it, read it, and
+run it — it writes a source list and imports one key. Both public keys are attached to
+every release: `gostow-signing-key.asc` signs the packages, `gostow-repo-signing-key.asc`
+signs the repository index.
+
+Each release is installed from these repositories, on Ubuntu 24.04 and Fedora 41, by CI
+before it is announced. If the instructions above stop working, the release fails.
+
+### Any linux or macOS — tarball
+
+```console
+$ VER=v0.1.0 OS=linux ARCH=amd64        # OS: linux|darwin   ARCH: amd64|arm64
+$ base=https://github.com/rocne/gostow/releases/download/$VER
+
+$ curl -fsSLO $base/gostow_${VER}_${OS}_${ARCH}.tar.gz
+$ curl -fsSLO $base/gostow_${VER}_checksums.txt
+$ sha256sum -c --ignore-missing gostow_${VER}_checksums.txt
+
+$ tar xzf gostow_${VER}_${OS}_${ARCH}.tar.gz
+$ sudo install -m755 gostow /usr/local/bin/gostow
+```
+
+### With the Go toolchain
+
+```console
+$ go install github.com/rocne/gostow/cmd/gostow@latest
+```
+
+### From source
+
+```console
+$ git clone https://github.com/rocne/gostow && cd gostow
 $ go build -o gostow ./cmd/gostow
 ```
 
-To use it as a true drop-in, install it as `stow`. gostow takes its program name from
-`argv[0]`, exactly as stow does, so its usage errors and its `--help` synopsis will say
-`stow`:
+### Verifying a release
 
-```console
-$ install -m755 gostow /usr/local/bin/stow
-```
-
-Release archives carry a sigstore build provenance attestation. Verify one with:
+Every archive carries a [sigstore](https://www.sigstore.dev/) build provenance attestation,
+and `checksums.txt` is signed with a keyless cosign signature (`.sig` + `.pem`).
 
 ```console
 $ gh attestation verify gostow_v0.1.0_linux_amd64.tar.gz \
     --repo rocne/gostow --signer-repo rocne/release-ci
 ```
 
-`--signer-repo` is required: the artifacts are built and signed by a reusable workflow that
-lives in `rocne/release-ci`, so that — not `rocne/gostow` — is the signing identity.
+`--signer-repo` is required, and its absence is easy to misread: the artifacts are built and
+signed by a reusable workflow living in `rocne/release-ci`, so that — not `rocne/gostow` —
+is the signing identity. Omit it and the command fails with a bare
+`Error: verifying with issuer "sigstore.dev"`, which looks like a bad signature but is a
+wrong invocation.
+
+### Using it as a drop-in
+
+gostow takes its program name from `argv[0]`, exactly as stow does, so invoked as `stow` its
+usage errors and its `--help` synopsis say `stow`. Point the name at it:
+
+```console
+$ sudo ln -sf "$(command -v gostow)" /usr/local/bin/stow
+$ stow --version
+gostow 0.1.0 (GNU Stow 2.4.1 compatible)
+```
+
+If GNU Stow is also installed, make sure `/usr/local/bin` precedes `/usr/bin` on your
+`PATH`, or the Perl one wins.
 
 ## What's different
 
