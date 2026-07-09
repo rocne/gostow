@@ -205,6 +205,10 @@ func parseLong(t *table, r *Result, body string, args []string, i int) int {
 		// erroring, unlike the StringArg case above.
 		if hasValue && value != "" {
 			if !intLiteral.MatchString(value) {
+				// This wording is Getopt::Long's, not stow's, and it changed in
+				// Getopt::Long 2.55 from "(number expected)". It therefore varies
+				// with the installed Perl rather than with the pinned stow
+				// version. Ledger PL-19: pin the current upstream wording.
 				r.Errors = append(r.Errors,
 					fmt.Sprintf("Value %q invalid for option %s (integer number expected)", value, key))
 				return 0

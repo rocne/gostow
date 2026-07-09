@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os/exec"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -147,6 +148,19 @@ func buildCorpus() [][]string {
 	return corpus
 }
 
+// reGetoptDrift folds away the one diagnostic whose wording belongs to
+// Getopt::Long rather than to stow, and which therefore varies with the Perl
+// installed rather than with the pinned stow version. Getopt::Long 2.54 (Ubuntu
+// 24.04, perl 5.38) says "(number expected)"; 2.58 (perl 5.40) says "(integer
+// number expected)". Ledger PL-19: gostow pins the current upstream wording, and
+// the comparison accepts either. Nothing else is normalised -- any other
+// divergence must still fail.
+var reGetoptDrift = regexp.MustCompile(`\(number expected\)`)
+
+func canonicalizeGetoptDrift(s string) string {
+	return reGetoptDrift.ReplaceAllString(s, "(integer number expected)")
+}
+
 func TestParseAgreesWithRealGetoptLong(t *testing.T) {
 	if _, err := exec.LookPath("perl"); err != nil {
 		t.Skip("perl not available; the oracle build tag implies it should be")
@@ -175,7 +189,7 @@ func TestParseAgreesWithRealGetoptLong(t *testing.T) {
 	spec := stowSpec()
 	mismatches := 0
 	for i, v := range corpus {
-		want := records[i]
+		want := canonicalizeGetoptDrift(records[i])
 		got := foldPerlDump(Parse(spec, v))
 		if got != want {
 			mismatches++
