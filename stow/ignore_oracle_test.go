@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -158,24 +159,33 @@ func runIgnoreOracle(t *testing.T, perlLib, root, home string, paths []string) [
 	return got
 }
 
-// findPerlLib locates the Stow.pm that ships with the pinned binary at oracleBin.
-// The module sits under <prefix>/share/perl5, sometimes below a Perl-version
-// directory, so it is searched for rather than assumed.
+// reUseLib captures the module directory stow's own build baked into it.
+var reUseLib = regexp.MustCompile(`(?m)^use lib "([^"]+)";`)
+
+// findPerlLib asks the oracle where its modules are, rather than guessing. stow's
+// build substitutes a literal `use lib "<pmdir>";` into the installed script, and
+// the directory it names depends on both the install prefix and the Perl version
+// (2.4.1 built against perl 5.40 lands in share/perl5/5.40). Guessing that layout
+// is how this test came to skip silently in CI while passing locally.
+//
+// An oracle binary without a readable Stow.pm is a broken installation: fail,
+// never skip. A conformance test that skips is a vacuous pass.
 func findPerlLib(t *testing.T, oracleBin string) string {
 	t.Helper()
 
-	prefix := filepath.Dir(filepath.Dir(oracleBin)) // <prefix>/bin/stow -> <prefix>
-	base := filepath.Join(prefix, "share", "perl5")
-
-	if _, err := os.Stat(filepath.Join(base, "Stow.pm")); err == nil {
-		return base
+	script, err := os.ReadFile(oracleBin)
+	if err != nil {
+		t.Fatalf("reading the oracle script %s: %v", oracleBin, err)
 	}
-	versioned, _ := filepath.Glob(filepath.Join(base, "*", "Stow.pm"))
-	if len(versioned) > 0 {
-		return filepath.Dir(versioned[0])
+	m := reUseLib.FindSubmatch(script)
+	if m == nil {
+		t.Fatalf(`no 'use lib "..."' line in the oracle script %s`, oracleBin)
 	}
-	t.Fatalf("Stow.pm not found under %s, though the oracle binary %s exists", base, oracleBin)
-	return ""
+	dir := string(m[1])
+	if _, err := os.Stat(filepath.Join(dir, "Stow.pm")); err != nil {
+		t.Fatalf("Stow.pm not found in %s, named by the oracle script %s: %v", dir, oracleBin, err)
+	}
+	return dir
 }
 
 func writeFile(t *testing.T, path, content string) {
