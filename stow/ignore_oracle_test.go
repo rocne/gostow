@@ -88,7 +88,13 @@ func TestIgnoreAgreesWithStowPm(t *testing.T) {
 	// vacuous pass.
 	perlLib := findPerlLib(t, conformance.OraclePath(t))
 
-	for _, fx := range ignoreFixtures() {
+	fixtures := ignoreFixtures()
+	// Reported rather than asserted in prose: a hand-copied count in a document
+	// goes stale the first time somebody adds a path.
+	t.Logf("comparing %d ignore verdicts against Stow.pm (%d fixtures x %d paths)",
+		len(fixtures)*len(ignorePaths), len(fixtures), len(ignorePaths))
+
+	for _, fx := range fixtures {
 		t.Run(fx.name, func(t *testing.T) {
 			root := t.TempDir()
 			for _, d := range []string{"stow/pkg", "target", "home"} {

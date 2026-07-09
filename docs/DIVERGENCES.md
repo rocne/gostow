@@ -24,12 +24,23 @@ reproduce any of them, ever, with or without flags.
 | **Exits with whatever error number the last failed system call left behind** — 2 here, 255 there, depending on the machine. | Every fatal error exits 2. |
 | Contains code paths that would crash or silently corrupt its own bookkeeping if they were reachable. They are not reachable. | Those paths are simply not written. |
 
-There is also one cosmetic difference you cannot turn off:
+There are also two cosmetic differences that are not bugs being fixed:
 
 - **`gostow --version` reports gostow's version**, naming the stow release it clones:
   `gostow 0.1.0 (GNU Stow 2.4.1 compatible)`. Reporting `2.4.1` for a binary released
   as `0.1.0` would be theatre. The same line opens `--help`; every other byte of the
   help block is stow's, verbatim.
+
+- **gostow colours its output when it is talking to a terminal.** Real stow never does.
+  Nothing else in this document is additive; this is, because it cannot reach a script.
+  Colour appears only when the stream is a terminal, and it only ever wraps text that was
+  already there — take the escapes back out and you have stow's bytes, exactly. Redirect
+  to a file, pipe it anywhere, or set `NO_COLOR` to any non-empty value, and gostow emits
+  not one escape character. `TERM=dumb` disables it too.
+
+  The slogan is *byte-compatible on a pipe, prettier on a TTY*, and the test suite proves
+  the first half: `gostow --help` on a terminal, with the colour stripped, is compared
+  byte-for-byte against `stow --help`.
 
 ---
 

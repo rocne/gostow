@@ -93,7 +93,7 @@ When this document, `docs/SPEC.md`, and the real binary disagree, **the binary w
 ## Validation steps
 
 - `go build ./...`, `go vet ./...`, `go test ./...` before committing.
-  (Note `go build ./...` drops a `gostow` binary at the repo root; it's gitignored.)
+  (Build the binary with `go build -o gostow ./cmd/gostow`; it's gitignored.)
 - `golangci-lint run ./...` — `unused` will fail the build on an unreferenced
   package-level var, so don't add ldflags targets before something reads them.
 - `actionlint` before touching `.github/workflows/`.
@@ -145,33 +145,40 @@ ignore lists; and reports conflicts and exit codes.
 
 Layout: `stow/` is the engine (a deep module: `Apply` plus `Stow`/`Unstow`/`Restow`
 sugar), `internal/getopt` is a `Getopt::Long`-compatible parser, `internal/cli` is the
-front end, `internal/conformance` is the differential harness.
+front end, `internal/ui` is colour-on-a-TTY, `internal/conformance` is the differential
+harness.
 
 Validation: `go test ./...` is hermetic. `go test -tags oracle ./...` additionally runs
-**6307 argv vectors against real `Getopt::Long`**, 20 engine fixtures and 35 full-binary
-fixtures against real stow 2.4.1, comparing stdout, stderr, exit code and the resulting
-tree. Install the oracle with `PREFIX=$PWD/.oracle bash test/install-stow-oracle.sh`
-(`.oracle/` is gitignored; CI installs to `/usr/local` via sudo).
+**6307 argv vectors against real `Getopt::Long`**, **1216 ignore verdicts** against
+`Stow.pm`'s own `ignore()`, and **62 differential fixtures** (20 engine-level, 42 driving
+the whole binary) against real stow 2.4.1, comparing stdout, stderr, exit code and the
+resulting tree. Install the oracle with `PREFIX=$PWD/.oracle bash test/install-stow-oracle.sh`
+(`.oracle/` is gitignored; CI installs to `/usr/local` via sudo). Counts are printed by the
+tests themselves — never hand-copy one into a document.
 
-The ledger is fully ruled — PL-01..PL-18, including three probed this session (PL-06
-unreachable, PL-09 and PL-10 confirmed bugs) and one *found* this session:
+The ledger is fully ruled, PL-01..PL-19. The highest-severity finding is **PL-18**:
+`Stow.pm` interpolates `$ENV{HOME}` into a regex unescaped, so any user whose home path
+contains `(`, `[`, `+`, `*` … cannot run stow at all. It dies before doing any work, at
+every verbosity. gostow never builds that regex. Owed upstream.
 
-- **PL-18** — `Stow.pm` interpolates `$ENV{HOME}` into a regex unescaped, so any user
-  whose home path contains `(`, `[`, `+`, `*` … cannot run stow at all. It dies before
-  doing any work, at every verbosity. gostow never builds that regex. Highest-severity
-  finding of the audit; owed upstream.
+Colour (SPEC §8.4) is implemented as a **rendering pass over finished lines** in
+`internal/ui`, wired in once at `cli.Run`. Two invariants hold it to the parity mandate:
+`StripANSI(paint(s)) == s` over every line shape, and — when colour is off — the pass does
+not run at all. The engine never learns that terminals exist.
 
 Still owed before v1:
 
-- **Verbosity ≥3 output** is not implemented. PL-11 owes only *semantic* equivalence
-  there, but gostow currently emits a subset of the trace lines. Decide what "semantic
-  equivalence" is tested as, then implement.
-- **Port `ignore.t`** (287 assertions). The matcher is implemented and differentially
-  tested, but stow's own suite encodes *intent* and would catch a shared misreading.
+- **Public API review.** `Task.Source` is overloaded (link destination vs move destination)
+  and `Action.String()` leaks message formatting into a domain type. Cheap now, expensive
+  after a v1 tag freezes the surface.
+- **darwin and arm64 ship untested.** GoReleaser builds them; CI is Ubuntu-only.
+- **Licence question.** gostow is MIT and reproduces GNU Stow's (GPLv3) help text and
+  built-in ignore list verbatim. Needs a human decision before publishing v1.
 - Upstream bug reports: PL-01, PL-03, PL-04, PL-05, PL-06, PL-08, PL-09, PL-10, PL-18.
 
 `chkstow` is ruled **out of scope for v1** (SPEC §12). `--compat` and the PL-04
-protection asymmetry are both pinned by differential fixtures.
+protection asymmetry are both pinned by differential fixtures. `ignore.t` is settled without
+porting it: `Stow.pm`'s own `ignore()` is the oracle.
 
 **Do not tag v1 without a human decision.** The four pre-1.0 guards stay standing until
 then; release-please's standing PR (#2) is deliberately left open.

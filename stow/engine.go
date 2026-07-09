@@ -56,9 +56,8 @@ type Options struct {
 	// contract. It is off by default, because gostow's promise is to *be* stow.
 	//
 	// This is the seam for a consumer that wants stow's engine without stow's
-	// warts — it is a library parameter first, and the CLI's hidden
-	// --gostow-fix second. What it changes is listed in docs/DIVERGENCES.md; the
-	// sites are:
+	// warts — it is a library parameter first, and the CLI's --gostow-fix
+	// second. What it changes is listed in docs/DIVERGENCES.md; the sites are:
 	//
 	//   - stowContents passes the target subdir, not the package subdir, to
 	//     shouldSkipTarget, closing the --dotfiles protection bypass below.
