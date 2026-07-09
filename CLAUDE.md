@@ -106,6 +106,28 @@ When this document, `docs/SPEC.md`, and the real binary disagree, **the binary w
 - **Conformance:** `go test ./...` is hermetic (goldens, no Perl).
   `go test -tags oracle ./...` runs the differential suite against real stow.
 
+### The test cache cannot see the oracle — do not trust a `(cached)` result
+
+`go test` validates a cached result against the test binary, its arguments, the
+environment variables the test read, and the files it opened **through package `os`**.
+Every oracle here lives in a *subprocess*: real `stow`, real `perl`, `Stow.pm`,
+`Getopt::Long`, and the two `.pl` driver scripts. None of that is visible to the cache.
+
+Measured, not theorised: replacing `Stow.pm`'s `ignore()` with `return 0` and re-running
+`go test -tags oracle ./stow/` printed `ok (cached)` — 1216 verdicts "verified" against an
+oracle answering *no* to everything. The same held for both `.pl` scripts, and for gostow's
+own source before `internal/conformance` gained an import edge to `internal/cli`.
+
+Two defences, both required:
+
+- `conformance.TrackOracleInput(t, paths...)` reads each subprocess input so its content
+  hash enters the cache key. **Call it whenever you add an oracle input.**
+- CI passes `-count=1`. Use it yourself when a result matters.
+
+And: **a conformance test that skips is a vacuous pass.** `OraclePath`, `RequirePerl` and
+`OraclePerlLib` all `t.Fatal`. Never soften one to `t.Skip` — with no oracle installed the
+old `t.Skip` made the whole differential suite print `ok` in 0.26s instead of 5.8s.
+
 ## Versioning — gostow stays pre-1.0
 
 **A `v1` tag is a promise of stow parity we have not earned.** Until the engine is

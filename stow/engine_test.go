@@ -148,27 +148,48 @@ func TestUnstowToleratesLinkPointingAtZero(t *testing.T) {
 
 // Ledger PL-10. Real stow silently disables *all* ignoring — stowing README.md
 // and the ignore file itself — and exits 0. gostow fails loudly instead.
+//
+// Two ways to make the file exist but not read. `chmod 000` is the natural one
+// and is what a user hits, but it does nothing to root, so under `sudo go test`
+// that case can only skip. A directory named `.stow-local-ignore` is unreadable
+// to *everyone*, root included, and reaches exactly the same code path — so the
+// ruling is always asserted, whoever runs the suite. A skipped case is a case
+// nobody tested.
 func TestUnreadableIgnoreFileIsFatal(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("running as root: chmod 000 does not prevent reads")
-	}
-	root := sandbox(t)
-	write(t, filepath.Join(root, "stow/pkg/f"), "x")
-	write(t, filepath.Join(root, "stow/pkg/README.md"), "readme")
-	ignoreFile := filepath.Join(root, "stow/pkg/.stow-local-ignore")
-	write(t, ignoreFile, "something\n")
-	if err := os.Chmod(ignoreFile, 0o000); err != nil {
-		t.Fatal(err)
+	makeUnreadable := map[string]func(t *testing.T, path string){
+		"a directory in its place": func(t *testing.T, path string) {
+			if err := os.Mkdir(path, 0o755); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"chmod 000": func(t *testing.T, path string) {
+			if os.Geteuid() == 0 {
+				t.Skip("running as root: chmod 000 does not prevent reads (the directory case above still asserts the ruling)")
+			}
+			write(t, path, "something\n")
+			if err := os.Chmod(path, 0o000); err != nil {
+				t.Fatal(err)
+			}
+		},
 	}
 
-	_, err := Stow(opts(root), "pkg")
+	for name, breakIt := range makeUnreadable {
+		t.Run(name, func(t *testing.T) {
+			root := sandbox(t)
+			write(t, filepath.Join(root, "stow/pkg/f"), "x")
+			write(t, filepath.Join(root, "stow/pkg/README.md"), "readme")
+			breakIt(t, filepath.Join(root, "stow/pkg/.stow-local-ignore"))
 
-	var fe *FatalError
-	if !errors.As(err, &fe) {
-		t.Fatalf("Stow: err = %v, want *FatalError", err)
-	}
-	if _, err := os.Lstat(filepath.Join(root, "target/README.md")); !os.IsNotExist(err) {
-		t.Error("README.md was stowed: the built-in ignore list was silently disabled")
+			_, err := Stow(opts(root), "pkg")
+
+			var fe *FatalError
+			if !errors.As(err, &fe) {
+				t.Fatalf("Stow: err = %v, want *FatalError", err)
+			}
+			if _, err := os.Lstat(filepath.Join(root, "target/README.md")); !os.IsNotExist(err) {
+				t.Error("README.md was stowed: the built-in ignore list was silently disabled")
+			}
+		})
 	}
 }
 

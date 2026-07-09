@@ -119,6 +119,51 @@ compare unequal to `RMDIR: bin` (ledger PL-05), or the suite is not testing pari
 Per SPEC §8.2, byte-exactness is a contract at verbosity **0–2**. Levels 3–5 are compared
 semantically (task sequence), not byte-wise — pending the PL-11 ruling.
 
+### 3.1 The oracle is invisible to `go test`'s cache
+
+**Audited 2026-07-09.** `go test` may replay a stored PASS instead of running anything. It
+decides the stored result is still valid by hashing the test binary, its arguments, the
+environment variables the test read, and the files it opened or stat'd **through package
+`os`**. A subprocess's inputs are not in that set.
+
+Every oracle in this repository is a subprocess. So every one of them was invisible:
+
+| Sabotage | Package | Result before the fix |
+|---|---|---|
+| `Stow.pm`'s `ignore()` → `return 0` | `stow` | `ok (cached)` — 1216 verdicts against an oracle answering *no* to everything |
+| `testdata/ignore_oracle.pl` → always `1` | `stow` | `ok (cached)` |
+| `testdata/getopt_oracle.pl` → lies on every vector | `internal/getopt` | `ok (cached)` |
+| `internal/cli`'s usage path | `internal/conformance` | `ok (cached)` — the package had no import edge to the code it tests |
+
+Only the `stow` *binary* escaped, and only by luck: `exec.Command` stats it via `LookPath`,
+and a stat entry does enter the cache key.
+
+Two defences, both kept:
+
+1. **`conformance.TrackOracleInput(t, paths...)`** reads each subprocess input, putting an
+   `open` entry with a content hash into the test log. This makes caching *correct*.
+   `conformance.PerlModulePath` asks perl where it really loaded a module from, because the
+   module that matters is the one perl resolves, not the one we expected.
+2. **CI passes `-count=1`.** A result that gates a release should be produced, not recalled.
+
+The import edge for gostow's own source lives in `cli_oracle_test.go`, not in a non-test
+file: package `stow`'s oracle tests import `conformance`, and `internal/cli` imports `stow`,
+so a non-test edge would be an import cycle. A package's test files are not compiled into it
+when another package imports it.
+
+### 3.2 A conformance test that skips is a vacuous pass
+
+`OraclePath`, `RequirePerl` and `OraclePerlLib` all `t.Fatal`. `OraclePath` used to `t.Skip`
+when it found no stow; on a machine without one, `go test -tags oracle ./...` then printed
+`ok` for every package in 0.26s rather than 5.8s, comparing nothing. The build tag *is* the
+caller asking for the oracle.
+
+The same rule pushed one skip out of the hermetic suite. `TestUnreadableIgnoreFileIsFatal`
+used `chmod 000`, which does nothing to root, so under `sudo go test` it skipped. Replacing
+the file with a **directory** makes it unreadable to everyone and reaches the same code path
+— and doing so immediately exposed a real gostow bug (SPEC §10, PL-10): `os.Open` succeeds
+on a directory, and the reader was swallowing the `EISDIR` from the first `Read`.
+
 ---
 
 ## 4. Porting stow's own suite

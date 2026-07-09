@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/rocne/gostow/internal/conformance"
 )
 
 // The hand-written table in getopt_test.go is a transcription of probe output,
@@ -161,10 +163,20 @@ func canonicalizeGetoptDrift(s string) string {
 	return reGetoptDrift.ReplaceAllString(s, "(integer number expected)")
 }
 
+const getoptOracleScript = "testdata/getopt_oracle.pl"
+
 func TestParseAgreesWithRealGetoptLong(t *testing.T) {
-	if _, err := exec.LookPath("perl"); err != nil {
-		t.Skip("perl not available; the oracle build tag implies it should be")
-	}
+	// perl's absence is a broken installation, not a reason to pass: the `oracle`
+	// build tag is the caller asking to be compared against a Perl program.
+	conformance.RequirePerl(t)
+
+	// The driver script and Getopt::Long itself are read by perl, never by Go, so
+	// `go test`'s cache cannot see them. Without this, replacing the script with
+	// one that lies about every vector still printed "ok (cached)".
+	conformance.TrackOracleInput(t,
+		getoptOracleScript,
+		conformance.PerlModulePath(t, "", "Getopt::Long"),
+	)
 
 	corpus := buildCorpus()
 
@@ -174,7 +186,7 @@ func TestParseAgreesWithRealGetoptLong(t *testing.T) {
 		stdin.WriteString("\n")
 	}
 
-	cmd := exec.Command("perl", "testdata/getopt_oracle.pl")
+	cmd := exec.Command("perl", getoptOracleScript)
 	cmd.Stdin = strings.NewReader(stdin.String())
 	out, err := cmd.Output()
 	if err != nil {
