@@ -129,9 +129,12 @@ where gostow and stow agree because gostow copied a misreading.
 
 Port priority, highest value first:
 
-1. `ignore.t` — **287 assertions**, by far the densest. Ignore-list semantics are the
-   subtlest part of the spec (three exclusive sources, segment-vs-path partitioning,
-   anchoring). Port before writing the matcher.
+1. ~~`ignore.t`~~ — **done, but not by porting.** Its 287 assertions all call `Stow.pm`'s
+   `ignore()` predicate directly. Rather than transcribe the expectations — which would
+   re-import whatever misreading the transcriber brought — `stow/ignore_oracle_test.go`
+   drives that same predicate over 19 ignore-file fixtures × 60 paths (1140 comparisons),
+   covering ignore.t's own cases plus the built-in list's prefix/suffix edges. Verified
+   non-vacuous by mutation.
 2. `stow.t` (22) and `unstow.t` (35) — the core algorithm.
 3. `rc_options.t` (35) — `.stowrc` merge/precedence, where the manual is wrong (PL-01).
 4. `dotfiles.t` (14) — note the tarball also ships `dotfiles.t.rej` and `unstow.t.orig`,
