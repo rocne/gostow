@@ -26,12 +26,38 @@ jobs:
     outputs:
       release_created: ${{ steps.rp.outputs.release_created }}
       tag_name: ${{ steps.rp.outputs.tag_name }}
+      pr: ${{ steps.rp.outputs.pr }}
     steps:
       - uses: googleapis/release-please-action@v5
         id: rp
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  # ci.yml's version-guard CANNOT see release-please's release PR: GitHub does
+  # not trigger `pull_request` (or `pull_request_target`) workflows for PRs
+  # opened with GITHUB_TOKEN, to prevent recursion. So the release PR — the one
+  # PR whose version actually matters — arrives with zero checks. Guard it here
+  # instead, inside the run that created it.
+  guard-release-pr:
+    needs: release-please
+    if: needs.release-please.outputs.pr != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse a release PR proposing 1.0.0 or later
+        env:
+          PR_JSON: ${{ needs.release-please.outputs.pr }}
+        run: |
+          title=$(printf '%s' "$PR_JSON" | jq -er '.title')
+          echo "release PR title: $title"
+          version="${title##* }"
+          case "$version" in
+            0.*) echo "ok: $version is pre-1.0" ;;
+            *)
+              echo "::error::release PR proposes $version — gostow stays pre-1.0 until the stow engine is complete"
+              exit 1
+              ;;
+          esac
 
   # Last line of defence before artifacts ship. ci.yml's version-guard already
   # fails the release PR if the manifest reaches 1.0.0, so by the time we get

@@ -10,12 +10,20 @@ jobs:
   # gostow must stay pre-1.0 until the engine is complete: a v1 tag is a promise
   # of GNU Stow parity we have not earned yet.
   #
-  # release-please cannot reach 1.0.0 by itself — `bump-minor-pre-major: true`
-  # clamps even a breaking change to a minor bump while major == 0. But three
-  # things can still force it: a `Release-As: 1.0.0` commit footer (which
-  # short-circuits the versioning strategy entirely), flipping that config flag
-  # off, or hand-editing the manifest. All three surface as a manifest value, so
-  # this is where we catch them — on the release PR, before any tag exists.
+  # Two distinct mechanisms could produce a v1, and `bump-minor-pre-major` stops
+  # neither on its own:
+  #
+  #   1. No prior release => release-please takes the INITIAL-release path and
+  #      returns `initial-version`, defaulting to 1.0.0 (strategies/base.ts). The
+  #      bump clamp is never consulted, because nothing is being bumped. Fixed by
+  #      pinning "initial-version": "0.1.0" in release-please-config.json.
+  #   2. A `Release-As: 1.0.0` commit footer short-circuits the whole versioning
+  #      strategy; so does flipping the clamp off, or editing the manifest.
+  #
+  # This job catches (2) for HUMAN pull requests. It does NOT see release-please's
+  # own release PR — GITHUB_TOKEN-authored PRs never trigger `pull_request`
+  # workflows — so that PR is guarded inside release-please.yml, and the tag is
+  # guarded again in both release workflows before anything is published.
   version-guard:
     runs-on: ubuntu-latest
     steps:
