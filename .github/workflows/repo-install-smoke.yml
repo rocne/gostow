@@ -1,0 +1,40 @@
+name: Repo install smoke test
+
+# On-demand verification that gostow installs from the hosted Cloudsmith repo
+# (rocne/releases) on a clean box, decoupled from the release pipeline. Use it
+# to confirm a release's apt/dnf path without cutting a new release, or to
+# re-check the repo after changing its settings.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag to verify (e.g. v0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: ubuntu:24.04
+            mgr: apt
+          - image: fedora:41
+            mgr: dnf
+    container: ${{ matrix.image }}
+    steps:
+      - uses: actions/checkout@v6
+
+      # Invoke via `bash` explicitly: the container's default /bin/sh is dash on
+      # Ubuntu, which can't run the script's `set -o pipefail`.
+      - name: Install gostow from the Cloudsmith repo and verify
+        run: bash ./test/run-repo-install-smoke.sh
+        env:
+          MGR: ${{ matrix.mgr }}
+          VERSION: ${{ inputs.version }}

@@ -1,0 +1,29 @@
+name: Release gostow
+
+# Break-glass release path: push a tag (e.g. `git push origin v0.1.1`) to cut a
+# release by hand. The primary path is release-please.yml (merge the standing
+# release PR); use this only when that can't run — e.g. re-cutting a botched
+# release.
+#
+# Delegates the actual release + e2e to the central reusable workflow
+# (rocne/release-ci) so the manual and release-please paths can never drift.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    permissions:
+      contents: write
+      issues: write
+      id-token: write
+      attestations: write
+    uses: rocne/release-ci/.github/workflows/release.yml@v0.1.1
+    with:
+      version: ${{ github.ref_name }}
+      goreleaser_config: .goreleaser/gostow.yaml
+      project_name: gostow
+      binary: gostow
+    secrets: inherit

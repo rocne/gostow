@@ -20,6 +20,9 @@ profile.cov
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
+# GoReleaser build output
+dist/
+
 # Go workspace file
 go.work
 go.work.sum
@@ -30,3 +33,6 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Built binary (go build ./... emits it at the repo root)
+/gostow

@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+  # Differential conformance against real GNU Stow. The spec IS stow's behaviour
+  # at the pinned version (docs/SPEC.md §1), so the oracle must be that exact
+  # version — Ubuntu 24.04's `apt install stow` gives 2.3.1 and would silently
+  # redefine the spec. Build the checksum-pinned tarball instead.
+  #
+  # The hermetic half of the suite (checked-in goldens) runs in `test` above with
+  # no Perl at all; this job is what keeps those goldens honest.
+  conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Install build deps for the oracle
+        run: sudo apt-get update && sudo apt-get install -y texinfo
+
+      - name: Build + install pinned GNU Stow oracle
+        run: sudo bash test/install-stow-oracle.sh
+
+      - name: Conformance tests (differential vs real stow)
+        run: go test -tags oracle ./...

@@ -1,0 +1,50 @@
+name: Release please
+
+# Curated, semver-correct release path. On every push to main, release-please
+# reads the Conventional Commit history and maintains a standing "release PR"
+# (next version + CHANGELOG). Merging that release PR is the human gate: it
+# creates the tag + GitHub release, then this workflow delegates the artifact
+# build to rocne/release-ci's reusable workflow — in the SAME run, so no PAT is needed
+# (an API-created tag would not trigger the tag-push release.yml on its own).
+#
+# release.yml (tag push) remains as a manual break-glass path.
+#
+# Requires repo setting: Actions → General → "Allow GitHub Actions to create and
+# approve pull requests" = ON. Without it release-please cannot open the release PR.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v5
+        id: rp
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  release:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    permissions:
+      contents: write
+      issues: write
+      id-token: write
+      attestations: write
+    uses: rocne/release-ci/.github/workflows/release.yml@v0.1.1
+    with:
+      version: ${{ needs.release-please.outputs.tag_name }}
+      goreleaser_config: .goreleaser/gostow.yaml
+      project_name: gostow
+      binary: gostow
+    secrets: inherit
