@@ -113,11 +113,22 @@ signs:
       - "${artifact}"
       - "--yes"
 
-# NOTE: dot-dagger additionally attaches its public signing keys via
-# `release.extra_files` (dotd-signing-key.asc, dotd-repo-signing-key.asc).
-# Deliberately omitted here: a missing glob is a hard goreleaser failure, and
-# whether gostow reuses dot-dagger's signing identity or mints its own is an
-# open question. Add the block once the keys are committed.
+# Attach both public keys to the GitHub release so a user can verify a downloaded
+# .deb/.rpm by hand, without trusting the Cloudsmith setup script.
+#
+# These are two DIFFERENT keys with different jobs:
+#   gostow-signing-key.asc       signs the packages themselves (fpr A998BF5F…).
+#                                gostow-specific; its private half is the
+#                                GPG_PRIVATE_KEY repo secret.
+#   gostow-repo-signing-key.asc  signs the apt/dnf repo INDEX (fpr 32F6F3B7…).
+#                                Shared: gostow and dot-dagger both publish into
+#                                the Cloudsmith repo rocne/releases, which has one
+#                                index and therefore one key. Its uid still reads
+#                                "dotd repository signing" for historical reasons.
+release:
+  extra_files:
+    - glob: ./gostow-signing-key.asc
+    - glob: ./gostow-repo-signing-key.asc
 
 changelog:
   sort: asc
