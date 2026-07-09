@@ -139,19 +139,41 @@ concrete.
 
 ### Current state (2026-07-09)
 
-Release pipeline is live and green; `docs/SPEC.md` and `docs/TEST-PLAN.md` are written.
-**No engine exists.** `cmd/gostow` answers `--version` and exits 2 on anything else.
+Release pipeline is live and green. **The engine and CLI are implemented.** `gostow`
+stows, unstows, restows, folds, unfolds and refolds; parses `.stowrc`; honours the
+ignore lists; and reports conflicts and exit codes.
 
-Owed before implementation:
+Layout: `stow/` is the engine (a deep module: `Apply` plus `Stow`/`Unstow`/`Restow`
+sugar), `internal/getopt` is a `Getopt::Long`-compatible parser, `internal/cli` is the
+front end, `internal/conformance` is the differential harness.
 
-- **Probe PL-06, PL-09, PL-10** against the real binary. They are `[inferred]` from
-  reading the Perl, and their tier — and therefore whether we replicate them — is
-  undecided until probed.
-- **Slice 3 (`internal/getopt`) is load-bearing and easy to underestimate.**
-  `Getopt::Long`'s `bundling` + `permute` + `no_ignore_case` + `auto_abbrev` +
-  `-v:+` semantics cannot be expressed with `pflag`/`cobra`. Every later CLI slice
-  depends on it. See `docs/SPEC.md` §4.1.
-- **PL-11** (byte-parity scope at verbosity ≥3) still needs a ruling.
+Validation: `go test ./...` is hermetic. `go test -tags oracle ./...` additionally runs
+**6307 argv vectors against real `Getopt::Long`**, 20 engine fixtures and 35 full-binary
+fixtures against real stow 2.4.1, comparing stdout, stderr, exit code and the resulting
+tree. Install the oracle with `PREFIX=$PWD/.oracle bash test/install-stow-oracle.sh`
+(`.oracle/` is gitignored; CI installs to `/usr/local` via sudo).
 
-`v0.1.0` would publish a stub whose `--version` claims `(GNU Stow 2.4.1 compatible)`.
-release-please's standing release PR is deliberately left open until that is true.
+The ledger is fully ruled — PL-01..PL-18, including three probed this session (PL-06
+unreachable, PL-09 and PL-10 confirmed bugs) and one *found* this session:
+
+- **PL-18** — `Stow.pm` interpolates `$ENV{HOME}` into a regex unescaped, so any user
+  whose home path contains `(`, `[`, `+`, `*` … cannot run stow at all. It dies before
+  doing any work, at every verbosity. gostow never builds that regex. Highest-severity
+  finding of the audit; owed upstream.
+
+Still owed before v1:
+
+- **Verbosity ≥3 output** is not implemented. PL-11 owes only *semantic* equivalence
+  there, but gostow currently emits a subset of the trace lines. Decide what "semantic
+  equivalence" is tested as, then implement.
+- **A discriminating `--compat` fixture.** The code path exists and is exercised, but no
+  test yet distinguishes compat from non-compat unstow (SPEC §12).
+- **The PL-04 asymmetry fixture** (`dot-foo` → `.foo` marked `.stow`): the protection
+  bypass is replicated in code but not pinned by a test.
+- **Port `ignore.t`** (287 assertions). The matcher is implemented and differentially
+  tested, but stow's own suite encodes *intent* and would catch a shared misreading.
+- **`chkstow`** — stow ships a second binary. In or out of scope? Undecided (SPEC §12).
+- Upstream bug reports: PL-01, PL-03, PL-04, PL-05, PL-06, PL-08, PL-09, PL-10, PL-18.
+
+**Do not tag v1 without a human decision.** The four pre-1.0 guards stay standing until
+then; release-please's standing PR (#2) is deliberately left open.

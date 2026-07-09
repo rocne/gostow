@@ -1,6 +1,6 @@
 # gostow — Conformance Specification
 
-**Status:** draft, test-first. Nothing implemented yet.
+**Status:** test-first, under construction. Ledger fully ruled; engine in progress.
 **Conformance referent:** GNU Stow **2.4.1** (released 2024-09-08; latest stable as of 2026-07-09).
 
 This document *is* the spec in the sense that it records what stow 2.4.1 does. Where
@@ -185,6 +185,18 @@ compatible parser in `internal/getopt`.
 | exact match beats abbreviation | `--no` is `--simulate` (exact alias), **not** an ambiguous prefix of `--no-folding` | **[probed]** |
 | ambiguous abbreviation | `--ver` → `Option ver is ambiguous (verbose, version)` on stderr, usage on stdout, **exit 1** | **[probed]** |
 | `--` terminator | Getopt stops; remaining args are **discarded, not treated as packages**. `stow -- pkg` → `stow: No packages to stow or unstow`, exit 1 | **[probed]** — ledger PL-03 |
+| abbreviation is canonicalised in diagnostics | `--tar` (missing value) → `Option target requires an argument`; but the exact alias `--d` → `Option d requires an argument` | **[probed]** |
+| a value-taking option eats the rest of its bundle | `-Dpkg` is `-D` then the bundle `pkg`: `p` is `--compat`, then `Unknown option: k`, `Unknown option: g` | **[probed]** |
+| `-v` bundle remainder is a value only if it is an integer | `-v3` sets 3; `-vv` increments twice; `-v=3` increments, then `Unknown option: =`, `Unknown option: 3` | **[probed]** |
+| `:+` swallows a numeric next argument | `-v 3` and `--verbose -1` set 3 and −1; `--verbose pkg` increments and leaves `pkg` a package | **[probed]** |
+| empty value: `=s` vs `:+` | `--dir=` → `Option dir requires an argument`; `--verbose=` → *increments* | **[probed]** |
+| errors do not stop parsing | Getopt::Long accumulates diagnostics; stow prints them all, then usage | **[probed]** |
+| the invalid-integer wording is **not stow's** | `(integer number expected)` since Getopt::Long 2.55; `(number expected)` before it | **[probed]** — ledger PL-19 |
+
+`internal/getopt` is validated by driving real `Getopt::Long`, configured exactly
+as stow configures it, over 6307 generated argv vectors and comparing the resulting
+options hash, both package lists, the leftover array and every diagnostic
+(`go test -tags oracle ./internal/getopt/`).
 
 ### 4.2 Options
 
@@ -243,6 +255,22 @@ synopsis, the option list, its wording and spacing — remains byte-exact (§8.4
 the omission of `--no-folding` (PL-16).
 
 This is the **only** intentional divergence in output. Ledger PL-12.
+
+### 4.4.1 Program name is `basename($0)` — replicate the mechanism
+
+`$ProgramName` is not the constant `stow`; it is `basename($0)`. Symlink stow to `mystow`
+and it answers `mystow: No packages to stow or unstow`, prints `mystow [OPTION ...]` as its
+synopsis, and banners `mystow (GNU Stow) version 2.4.1`. **[probed]** Ledger PL-17.
+
+gostow derives the program name from `os.Args[0]` the same way, so every usage error, fatal
+error and synopsis line is byte-exact when gostow is installed under the name `stow` — the
+drop-in case. The **identity line alone** ignores `$0` and says `gostow`, because it names
+the tool rather than the invocation.
+
+This is also what makes the differential harness strict: it builds gostow's binary *named
+`stow`*, so stderr and the synopsis compare byte-for-byte, and only the identity line is
+expected to differ. Note `Unknown option: foo` carries **no** program-name prefix at all —
+Getopt::Long emits it directly.
 
 ---
 
@@ -419,11 +447,16 @@ filesystem.` on stderr — to see what *would* happen you need `-nv`. **[probed]
 Line counts at each level are **[probed]** (0→1, 1→2, 2→8, 3→12 stderr lines for a
 one-file package under `-n`).
 
-**Scope of the byte-parity guarantee (ledger PL-11, needs ruling):** levels 0–2 are a
-scriptable contract and are byte-exact. Levels 3–5 emit Perl-internals-shaped traces
+**Scope of the byte-parity guarantee — RULED (2026-07-09), ledger PL-11.** Levels 0–2 are a
+scriptable contract and are **byte-exact**. Levels 3–5 emit Perl-internals-shaped traces
 (`Stowing contents of ../st / pkg / . (cwd=/tmp/...)`) that expose absolute paths and call
-structure. Proposal: guarantee byte-exactness for **0–2**, semantic equivalence only for
-**3–5**, and document it.
+structure; there, only **semantic equivalence** is owed.
+
+The guarantee in testable form: **at any verbosity, the subsequence of lines that levels 0–2
+would have emitted must match real stow byte-for-byte and in order.** Lines that only appear
+at ≥3 are unconstrained. Byte-parity on 3–5 would pin gostow's internal call structure to
+Perl's — fidelity nobody consumes, at the price of the freedom to be a different program
+inside.
 
 ### 8.3 Message formats (verbatim)
 
@@ -470,8 +503,17 @@ cannot stow directory <src> over existing non-directory target <path>
 source is an absolute symlink <path> => <dest>
 ```
 
-Fatal errors: `stow: ERROR: <message>` on stderr.
-Usage errors: `stow: <message>` on stderr, **then the full usage block on stdout**.
+Fatal errors come in **two shapes**, and the difference is visible:
+
+- `Stow::Util::error()` → `stow: ERROR: <message>` on stderr. **[probed]**
+- a bare `die()` (only reachable from `.stowrc` handling) → `<message>` on stderr, with **no
+  program-name prefix at all**. **[probed]**
+
+Both are pinned to exit 2 in gostow (PL-07); both message forms are replicated verbatim.
+
+Usage errors: `stow: <message>` on stderr followed by a **blank line**, then the full usage
+block on **stdout**. A parse failure calls `usage('')`: the empty message prints nothing, but
+still exits 1. **[probed]**
 
 ### 8.4 Colour (the sole additive liberty)
 
@@ -526,19 +568,22 @@ table is a deliverable in its own right.
 | PL-03 | `stow -- pkg` discards `pkg` (Getopt leaves it in the unread array) and fails with `No packages to stow or unstow`, exit 1. | probed | 3 | **Replicate.** Fails loudly and identically; no silent corruption. Revisit post-v1. Report upstream. |
 | PL-04 | `stow_contents` passes the **package** subdir to `should_skip_target`, while `unstow_contents` passes the **target** subdir. Under `--dotfiles` these differ, so stowing **bypasses `.stow`/`.nonstow` protection** that unstowing honours. | probed (discriminating case: pkg `dot-foo` → target `.foo` marked with `.stow`) | 3 | **Replicate for v1.** Real protection bypass — **report upstream**; strong candidate for post-v1 divergence. |
 | PL-05 | `RMDIR <dir>` printed without a colon; `LINK:`/`UNLINK:`/`MKDIR:`/`MV:` all have one. | probed | 1 | **Replicate.** Report upstream. |
-| PL-06 | `do_rmdir` reads `$self->{link_task_for}{$dir}` inside its `dir_task_for` branch → undef deref (crash); its "reverts" branch prints `MKDIR`, not `RMDIR`, and mutates the wrong table. | source; **unprobed** | 2 | **Do not replicate** the crash. Probe first to find whether the path is reachable; implement the evidently-intended `RMDIR` behaviour. Report upstream. |
+| PL-06 | `do_rmdir` reads `$self->{link_task_for}{$dir}` inside its `dir_task_for` branch → undef deref (crash); its "reverts" branch prints `MKDIR`, not `RMDIR`, and mutates the wrong table. | **probed (2026-07-09): unreachable** | 2 | **RULED: do not replicate — nothing to replicate.** The branch is dead code. `do_rmdir` is called only from `fold_tree`, only during `plan_unstow`, which wholly precedes `plan_stow`; `dir_task_for{$dir}` is therefore never set when it runs, and a directory can be folded at most once (after the first fold, `foldable` finds no links and returns early). Neither the crash nor the mislabelled `MKDIR (reverts)` can be reached from the CLI. gostow simply omits the branch. Report upstream. |
 | PL-07 | Fatal exit status is errno-derived (2 after a failed stat, 255 on a clean `die`). | probed | 2 | **Do not replicate.** Pin fatal = 2. |
 | PL-08 | `do_unlink` guards with `$self->{dir_task_for}{$file} eq 'create'` — comparing a hashref to a string. Always false; dead code. | source | 2 | **Do not replicate.** Implement the intended guard. Report upstream. |
-| PL-09 | `cleanup_invalid_links` uses `if (not $link_dest)` after `readlink`. A symlink whose destination is the literal string `0` is falsy in Perl → spurious `Could not read link` fatal. | source; **unprobed** | 2 | **Do not replicate.** Probe to confirm. Report upstream. |
-| PL-10 | An **unreadable** `.stow-local-ignore` (exists but `open` fails) makes `get_ignore_regexps_from_file` return `undef`, disabling **all** ignore matching — including the built-in defaults and the self-ignore of `.stow-local-ignore` itself, which then gets stowed. | source; **unprobed** | 1 or 2 | **Probe first.** If reproducible, tier 1 → replicate. |
-| PL-11 | Verbosity ≥3 emits Perl-internals traces with absolute paths and call structure. | probed | 3 | **Proposed:** byte-exact for levels 0–2; semantic equivalence for 3–5. **Needs ruling.** |
+| PL-09 | `cleanup_invalid_links` uses `if (not $link_dest)` after `readlink`. A symlink whose destination is the literal string `0` is falsy in Perl → spurious `Could not read link` fatal. | **probed (2026-07-09): confirmed** | 3 | **RULED: do not replicate.** A target symlink pointing at exactly `0` aborts the whole unstow with `stow: ERROR: Could not read link <path>`, exit 2, changing nothing — even though the link is perfectly readable and unrelated to the package. Destinations `00` and `0.0` unstow cleanly, so only `0` is affected. This is a Perl-falsiness bug (`not` where `defined` was meant), not behaviour; the same mistake sits in `foldable` and `unstow_link_node`. gostow uses `defined` and proceeds. Report upstream. |
+| PL-10 | An **unreadable** `.stow-local-ignore` (exists but `open` fails) makes `get_ignore_regexps_from_file` return `undef`, disabling **all** ignore matching — including the built-in defaults and the self-ignore of `.stow-local-ignore` itself, which then gets stowed. | **probed (2026-07-09): confirmed** | 3 | **RULED: do not replicate; substitute a fatal error.** Reproduced exactly: `README.md` is stowed, `.stow-local-ignore` stows *itself*, exit 0, no warning at any verbosity below 5. `get_ignore_regexps` gates on `-e $file`, so an existing-but-unreadable file reaches `get_ignore_regexps_from_file`, whose failed `open` returns bare `undef` instead of falling through to the defaults; every `defined` guard in `ignore()` then fails. gostow treats an unreadable ignore file as a fatal error (exit 2) rather than silently ignoring nothing: a broken config must fail loudly, and silently falling back to the built-ins would be an equally unfounded guess at intent. Report upstream. |
+| PL-11 | Verbosity ≥3 emits Perl-internals traces with absolute paths and call structure. | probed | 3 | **RULED (2026-07-09): scope the guarantee.** Byte-exact for levels **0–2**; at levels **3–5** only *semantic* equivalence is owed. Testable form: at any verbosity, the subsequence of lines that levels 0–2 would have emitted must match byte-for-byte and in order; additional trace lines are unconstrained. Levels 0–2 are the scriptable contract. Byte-parity on 3–5 would pin gostow's internal call structure to Perl's, buying fidelity nobody consumes at the price of the freedom to be a different program inside. |
 | PL-12 | `--version` prints `basename($0) (GNU Stow) version 2.4.1`, leaving no room for gostow's own build version. | source | — | **RULED (2026-07-09): diverge.** `--version` reports gostow's version, naming the conformant stow version alongside: `gostow 0.1.0 (GNU Stow 2.4.1 compatible)`. Parity is owed to behaviour scripts depend on, not to self-identification. The only intentional output divergence. §4.4 |
 | PL-13 | Documented known bug: the **empty-directory problem** (unstowing `quux` removes `target/bar` even though `foo/bar` needs it). | stow man page | 3 | **Replicate in v1.** Being better than stow is a different project. |
 | PL-14 | Documented known bug: tree-folding symlinks pointing into a *different* stow directory fail to split open. | stow man page | 3 | **Replicate in v1.** |
 | PL-15 | Perl regex vs RE2: `$` in Perl matches before a trailing newline; Go's `$` matches end-of-text only. Filenames may legally contain `\n`. | source analysis | 3 | Ledger. Decide during ignore-matcher implementation. |
 | PL-16 | `--no-folding` is a real flag but is **absent from `--help`** (present in the man page). | probed | 1 | **Replicate** the help text verbatim, omission included. |
+| PL-19 | `Value "abc" invalid for option verbose (...)` is emitted by **`Getopt::Long`, not by stow**, and its wording changed in Getopt::Long 2.55: 2.54 (Ubuntu 24.04, perl 5.38) says `(number expected)`, 2.58 (perl 5.40) says `(integer number expected)`. The byte is therefore a function of the installed Perl, not of the pinned stow 2.4.1. | **probed (2026-07-09)**, on two Perls | 2 | **Cannot replicate — the referent is undefined.** "stow 2.4.1's behaviour" does not determine this string. gostow pins the **current upstream wording** (`integer number expected`), which is what Getopt::Long has said since 2.55 and will keep saying. The differential suite folds the two spellings together, and *only* those two. |
+| PL-18 | `Stow.pm` interpolates `$ENV{HOME}` into a regex unescaped (`$msg =~ s!$ENV{HOME}(/|$)!~$1!g`, `Stow.pm:409` and `:759`), to abbreviate the home directory in a trace message. A `$HOME` containing a regex metacharacter therefore **kills stow before it does any work** — at *every* verbosity, because the substitution runs before the `debug()` guard. `HOME=/tmp/ho(me stow pkg` → `Unmatched ( in regex ... at Stow.pm line 409.`, exit 2, nothing stowed. | **probed (2026-07-09)** | 2 | **Do not replicate.** A crash, and undefined for any user whose home path contains `(`, `[`, `+`, `*`, `?`, `\` … gostow never builds that regex: the message it decorates exists only at verbosity ≥3, where PL-11 owes semantic equivalence, not bytes. **Report upstream** — this is the most serious defect the audit found. |
+| PL-17 | stow's program name is `basename($0)`, not a constant: symlink stow to `mystow` and the usage errors, the `--help` synopsis and the version banner all say `mystow`. | probed | 1 | **Replicate the mechanism.** gostow derives the program name from `os.Args[0]` exactly as stow does, so `stow: ERROR: ...` and the synopsis line are byte-exact when gostow is installed under the name `stow` — which is how it is used as a drop-in. The **identity line alone** is fixed to `gostow`, per PL-12: it names the tool, not the invocation. This is what lets the differential harness compare stderr byte-for-byte (it runs gostow's binary named `stow`). |
 
-**Upstream bug reports to file:** PL-01, PL-03, PL-04, PL-05, PL-06, PL-08, PL-09.
+**Upstream bug reports to file:** PL-01, PL-03, PL-04, PL-05, PL-06, PL-08, PL-09, PL-10, **PL-18** (highest severity: a `$HOME` containing a regex metacharacter makes stow unusable).
 
 ---
 
@@ -612,10 +657,24 @@ See PL-15 for the `$`-vs-newline divergence.
 
 ## 12. Open items
 
-- **PL-11** (verbosity byte-parity scope) and **PL-12** (`--version` line) need rulings.
-- **PL-06, PL-09, PL-10** are source-derived and **unprobed**; probe before implementing.
-- Go module path (`github.com/rocne/gostow`?) and package name for the engine.
+All ledger items are now ruled. What remains:
+
 - `chkstow` — stow ships a second binary. Out of scope for v1? Needs a decision.
 - `--compat` unstow semantics are characterised from source but **not yet discriminated by
   a probe**; the obvious test (rename a file in the package, then unstow) produced identical
   output in both modes. A proper discriminating fixture is required before implementing.
+- **PL-15** (`$` before a trailing newline in Perl vs RE2) is ledgered but its ruling is
+  deferred to the ignore-matcher implementation, as planned.
+
+### Settled (2026-07-09)
+
+- **PL-18** probed and ruled: `$HOME` is interpolated into a regex unescaped, so a home
+  directory containing a regex metacharacter crashes real stow at any verbosity. Not
+  replicated.
+
+- Go module path is `github.com/rocne/gostow`; the engine is `package stow` at `stow/`.
+- **PL-06** probed unreachable; **PL-09** and **PL-10** probed and confirmed as genuine bugs,
+  both ruled *do not replicate*.
+- **PL-11** ruled: byte-exact at verbosity 0–2, semantic equivalence at 3–5.
+- **PL-12** ruled: `--version` reports gostow's own version.
+- **PL-17** ruled: program name follows `basename($0)`, identity line excepted.

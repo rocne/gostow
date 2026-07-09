@@ -156,20 +156,20 @@ oracle keeps disproving. Each slice is a tracer bullet whose result informs the 
 | # | Slice | Seam | Status |
 |---|---|---|---|
 | 0 | `--version` reports gostow's version | S2 | ✅ **done** — the release smoke depends on it |
-| 1 | `joinPaths`, `parent` | S3 | |
-| 2 | `--help` byte-exact, exit 0; unknown option → usage on stdout, exit 1 | S2 | |
-| 3 | getopt-long parser: bundling, permute, `no_ignore_case`, auto-abbrev, exact-match-wins, `-v:+` | S2 | the flag semantics, not just the names |
-| 4 | stow one file into an empty target (one `LINK`) | S1 | |
-| 5 | tree folding | S1 | |
-| 6 | conflict: existing plain file → message + exit 1, nothing written | S1+S2 | proves two-phase abort |
-| 7 | unstow | S1 | |
-| 8 | unfold (split open) and refold | S1 | |
-| 9 | ignore matcher + built-in defaults + the three exclusive sources | S3+S1 | port `ignore.t` first |
-| 10 | `--dotfiles` translation | S1 | incl. the `dot-`, `dot-.x`, `dot--x` edge cases |
-| 11 | `.stowrc` discovery, merge, expansion | S2 | incl. PL-01 (home-then-cwd) |
-| 12 | `--adopt`, `--defer`, `--override` | S1 | |
-| 13 | `--compat` unstow | S1 | needs a discriminating fixture first (SPEC §12) |
-| 14 | `.stow` / `.nonstow` protection | S1 | incl. the PL-04 asymmetry |
+| 1 | `joinPaths`, `parent` | S3 | ✅ **done** — ported from `join_paths.t`, `parent.t` |
+| 2 | `--help` byte-exact, exit 0; unknown option → usage on stdout, exit 1 | S2 | ✅ **done** |
+| 3 | getopt-long parser: bundling, permute, `no_ignore_case`, auto-abbrev, exact-match-wins, `-v:+` | S2 | ✅ **done** — `internal/getopt`, differentially tested against real Getopt::Long |
+| 4 | stow one file into an empty target (one `LINK`) | S1 | ✅ **done** |
+| 5 | tree folding | S1 | ✅ **done** |
+| 6 | conflict: existing plain file → message + exit 1, nothing written | S1+S2 | ✅ **done** — proves two-phase abort |
+| 7 | unstow | S1 | ✅ **done** |
+| 8 | unfold (split open) and refold | S1 | ✅ **done** |
+| 9 | ignore matcher + built-in defaults + the three exclusive sources | S3+S1 | ✅ **done** — `ignore.t` port still owed |
+| 10 | `--dotfiles` translation | S1 | ✅ **done** — incl. the `dot-`, `dot-.x`, `dot--x` edge cases |
+| 11 | `.stowrc` discovery, merge, expansion | S2 | ✅ **done** — incl. PL-01 (home-then-cwd) |
+| 12 | `--adopt`, `--defer`, `--override` | S1 | ✅ **done** |
+| 13 | `--compat` unstow | S1 | implemented; **a discriminating fixture is still owed** (SPEC §12) |
+| 14 | `.stow` / `.nonstow` protection | S1 | implemented; **the PL-04 asymmetry fixture is still owed** |
 
 Slice 3 is load-bearing and easy to underestimate: `pflag`/`cobra` cannot express stow's
 option semantics (§4.1 of the spec), so `internal/getopt` is real work with its own unit
@@ -177,21 +177,20 @@ tests, and every later CLI slice depends on it.
 
 ---
 
-## 6. Probes owed before implementation
+## 6. Probes owed before implementation — **discharged (2026-07-09)**
 
-SPEC entries marked **[inferred]** are unproven. Three ledger items are source-derived and
-must be probed against the real binary before we decide what to implement:
+All three source-derived ledger items have been probed against the real binary. See
+`SPEC.md` §10 for the full rulings.
 
-- **PL-06** — is `do_rmdir`'s undef-deref path reachable at all?
-- **PL-09** — does a symlink whose destination is the literal string `0` really trigger
-  `Could not read link`?
-- **PL-10** — does an unreadable `.stow-local-ignore` really disable *all* ignoring,
-  including the built-in defaults, causing the ignore file itself to be stowed?
-
-Each is a one-shot probe against real stow. Their results decide tier (1 vs 2) and therefore
-whether we replicate.
-
----
+- **PL-06** — the `do_rmdir` undef-deref path is **unreachable**: `do_rmdir` runs only from
+  `fold_tree` during `plan_unstow`, which precedes `plan_stow`, so `dir_task_for` is never
+  populated when it runs. Dead code; gostow omits the branch.
+- **PL-09** — **confirmed**. A target symlink whose destination is exactly `0` aborts the
+  unstow with `stow: ERROR: Could not read link <path>`, exit 2. `00` and `0.0` are fine.
+  Perl falsiness bug; ruled *do not replicate*.
+- **PL-10** — **confirmed**. An existing-but-unreadable `.stow-local-ignore` silently
+  disables *all* ignoring, so `README.md` is stowed and the ignore file stows itself, exit 0,
+  no warning below verbosity 5. Ruled *do not replicate*; gostow makes it a fatal error.
 
 ## 7. What we do not test
 
