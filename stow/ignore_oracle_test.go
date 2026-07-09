@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -80,13 +79,20 @@ var ignorePaths = []string{
 	"a.log", "sub/deep.log", "skip", "skip.log", "dot-foo", ".foo",
 }
 
+const ignoreOracleScript = "testdata/ignore_oracle.pl"
+
 func TestIgnoreAgreesWithStowPm(t *testing.T) {
-	// OraclePath is the single place that decides whether an oracle exists (and
-	// asserts it is 2.4.1). Stow.pm ships beside that binary, so if the binary is
-	// there and the module is not, the installation is broken and this must fail
-	// loudly rather than skip -- a conformance test that silently skips is a
+	// OraclePath is the single place that decides whether an oracle exists, asserts
+	// it is 2.4.1, and registers the binary and its Stow.pm with the test cache.
+	// Every failure there is fatal: a conformance test that silently skips is a
 	// vacuous pass.
-	perlLib := findPerlLib(t, conformance.OraclePath(t))
+	oracle := conformance.OraclePath(t)
+	perlLib := conformance.OraclePerlLib(t, oracle)
+
+	// The driver script is read by perl, never by Go, so the cache cannot see it.
+	// Replacing it with one that answers "ignore everything" used to leave a
+	// "(cached) ok" in place.
+	conformance.TrackOracleInput(t, ignoreOracleScript)
 
 	fixtures := ignoreFixtures()
 	// Reported rather than asserted in prose: a hand-copied count in a document
@@ -140,7 +146,7 @@ func runIgnoreOracle(t *testing.T, perlLib, root, home string, paths []string) [
 		stdin.WriteString("\n")
 	}
 
-	cmd := exec.Command("perl", "testdata/ignore_oracle.pl")
+	cmd := exec.Command("perl", ignoreOracleScript)
 	cmd.Stdin = strings.NewReader(stdin.String())
 	cmd.Env = []string{
 		"PATH=/usr/local/bin:/usr/bin:/bin",
@@ -163,49 +169,6 @@ func runIgnoreOracle(t *testing.T, perlLib, root, home string, paths []string) [
 		got[i] = f == "1"
 	}
 	return got
-}
-
-// reUseLib captures the module directory stow's build baked into its script. The
-// line is absent when the install prefix is already in Perl's @INC, so its
-// absence is normal, not an error.
-var reUseLib = regexp.MustCompile(`(?m)^use lib "([^"]+)";`)
-
-// findPerlLib returns the directory the ignore oracle must prepend to @INC to
-// load the *pinned* Stow.pm, or "" when Perl already finds it.
-//
-// Guessing the layout is what made this test skip silently in CI while passing
-// locally: 2.4.1 built against perl 5.40 lands in share/perl5/5.40, and a
-// /usr/local install may need no `use lib` at all. So the oracle's own script is
-// read for the answer, and then Perl is asked to prove it can load Stow 2.4.1.
-//
-// Every failure here is fatal, never a skip: an oracle binary whose module cannot
-// be loaded is a broken installation, and a conformance test that skips is a
-// vacuous pass.
-func findPerlLib(t *testing.T, oracleBin string) string {
-	t.Helper()
-
-	script, err := os.ReadFile(oracleBin)
-	if err != nil {
-		t.Fatalf("reading the oracle script %s: %v", oracleBin, err)
-	}
-	dir := ""
-	if m := reUseLib.FindSubmatch(script); m != nil {
-		dir = string(m[1])
-	}
-
-	args := []string{}
-	if dir != "" {
-		args = append(args, "-I"+dir)
-	}
-	args = append(args, "-MStow", "-e", "print $Stow::VERSION")
-	out, err := exec.Command("perl", args...).Output()
-	if err != nil {
-		t.Fatalf("perl cannot load the pinned Stow.pm (lib=%q, from %s): %v", dir, oracleBin, err)
-	}
-	if got := strings.TrimSpace(string(out)); got != "2.4.1" {
-		t.Fatalf("perl loaded Stow %s, want 2.4.1: a mismatched module would redefine the spec", got)
-	}
-	return dir
 }
 
 func writeFile(t *testing.T, path, content string) {

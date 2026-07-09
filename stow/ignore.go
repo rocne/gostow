@@ -110,7 +110,12 @@ func (e *engine) ignoreRegexps(packageDir string) (*ignoreList, error) {
 	if list, ok := e.ignoreLists[builtin]; ok {
 		return list, nil
 	}
-	list, err := compileIgnorePatterns(parseIgnoreReader(strings.NewReader(defaultIgnoreData)))
+	// defaultIgnoreData is a compiled-in string, so the reader cannot fail.
+	patterns, err := parseIgnoreReader(strings.NewReader(defaultIgnoreData))
+	if err != nil {
+		return nil, err
+	}
+	list, err := compileIgnorePatterns(patterns)
 	if err != nil {
 		return nil, err
 	}
@@ -146,13 +151,26 @@ func loadIgnoreFile(path string) (*ignoreList, error) {
 		return nil, fatalf("cannot read ignore file %s (%v)", path, err)
 	}
 	defer func() { _ = f.Close() }()
-	return compileIgnorePatterns(parseIgnoreReader(f))
+
+	patterns, err := parseIgnoreReader(f)
+	if err != nil {
+		return nil, fatalf("cannot read ignore file %s (%v)", path, err)
+	}
+	return compileIgnorePatterns(patterns)
 }
 
 // parseIgnoreReader applies stow's per-line cleanup and returns the distinct
 // patterns. The self-ignoring rule is always appended, so a local ignore file
 // never stows itself.
-func parseIgnoreReader(r interface{ Read([]byte) (int, error) }) []string {
+//
+// A read error is returned, never swallowed. Silently treating a half-read file
+// as a complete one would reproduce, by a different route, the very bug PL-10
+// rules against: the three ignore sources are exclusive, so an ignore file that
+// yields no patterns does not fall back to the built-in defaults — it disables
+// them. `os.Open` succeeds on a *directory*, and its first Read fails with
+// EISDIR; before this returned an error, a directory named `.stow-local-ignore`
+// made gostow stow README.md and exit 0.
+func parseIgnoreReader(r interface{ Read([]byte) (int, error) }) ([]string, error) {
 	seen := map[string]bool{}
 	var out []string
 	add := func(p string) {
@@ -173,8 +191,11 @@ func parseIgnoreReader(r interface{ Read([]byte) (int, error) }) []string {
 		line = strings.ReplaceAll(line, `\#`, "#")
 		add(line)
 	}
+	if err := sc.Err(); err != nil {
+		return nil, err
+	}
 	add(`^/\.stow-local-ignore$`)
-	return out
+	return out, nil
 }
 
 // compileIgnorePatterns partitions patterns by whether they contain a "/".

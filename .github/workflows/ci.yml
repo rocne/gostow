@@ -72,8 +72,14 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      # -count=1 disables the result cache. The harness reaches its oracles
+      # through subprocesses, and `go test` cannot see a subprocess's inputs, so
+      # a cached PASS can outlive the thing it tested. internal/conformance
+      # registers those inputs explicitly (TrackOracleInput) to make caching
+      # correct; this makes it moot. A result that gates a release should be
+      # produced, not recalled.
       - name: Test
-        run: go test ./...
+        run: go test -count=1 ./...
 
   # Differential conformance against real GNU Stow. The spec IS stow's behaviour
   # at the pinned version (docs/SPEC.md §1), so the oracle must be that exact
@@ -98,4 +104,4 @@ jobs:
         run: sudo bash test/install-stow-oracle.sh
 
       - name: Conformance tests (differential vs real stow)
-        run: go test -tags oracle ./...
+        run: go test -count=1 -tags oracle ./...
