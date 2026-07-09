@@ -1,0 +1,48 @@
+name: Release gostow
+
+# Break-glass release path: push a tag (e.g. `git push origin v0.1.1`) to cut a
+# release by hand. The primary path is release-please.yml (merge the standing
+# release PR); use this only when that can't run — e.g. re-cutting a botched
+# release.
+#
+# Delegates the actual release + e2e to the central reusable workflow
+# (rocne/release-ci) so the manual and release-please paths can never drift.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  # The break-glass path bypasses release-please entirely, so it bypasses every
+  # versioning guard release-please provides. Re-assert the pre-1.0 rule here:
+  # `git push origin v1.0.0` must not publish.
+  guard-pre-1-0:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse to publish 1.0.0 or later
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          case "$TAG" in
+            v0.*) echo "ok: $TAG is pre-1.0" ;;
+            *)
+              echo "::error::refusing to publish $TAG — gostow stays pre-1.0 until the stow engine is complete"
+              exit 1
+              ;;
+          esac
+
+  release:
+    needs: guard-pre-1-0
+    permissions:
+      contents: write
+      issues: write
+      id-token: write
+      attestations: write
+    uses: rocne/release-ci/.github/workflows/release.yml@v0.1.1
+    with:
+      version: ${{ github.ref_name }}
+      goreleaser_config: .goreleaser/gostow.yaml
+      project_name: gostow
+      binary: gostow
+    secrets: inherit

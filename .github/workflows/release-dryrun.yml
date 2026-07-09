@@ -1,0 +1,83 @@
+name: Release dry-run
+
+# Signing gate. Builds + signs a SNAPSHOT release (no publish, no Homebrew push)
+# and verifies the signature, to de-risk the signing pipeline before a real
+# release. Does NOT validate the central release-ci signing identity (different workflow
+# file) — only that the goreleaser signs block, cosign install, permissions, and
+# verify mechanics work.
+#
+# Runs automatically on PRs that touch release-signing files (workflow_dispatch
+# can't be triggered from a branch until the workflow is on the default branch),
+# and is also available manually once merged.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .goreleaser/**
+      - .github/workflows/release-dryrun.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  dryrun:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - uses: sigstore/cosign-installer@v3
+
+      - name: Install rpm tooling
+        run: sudo apt-get update && sudo apt-get install -y rpm
+
+      - name: Generate throwaway package signing key
+        run: |
+          GNUPGHOME="$(mktemp -d)"; export GNUPGHOME
+          printf '%%no-protection\nKey-Type: RSA\nKey-Length: 2048\nName-Real: dryrun\nName-Email: dryrun@example.invalid\nExpire-Date: 0\n%%commit\n' > "$GNUPGHOME/k.conf"
+          gpg --batch --generate-key "$GNUPGHOME/k.conf"
+          FPR=$(gpg --list-keys --with-colons dryrun@example.invalid | awk -F: '/^fpr:/{print $10; exit}')
+          gpg --armor --export-secret-keys "$FPR" > "$RUNNER_TEMP/dryrun-priv.asc"
+          gpg --armor --export "$FPR"             > "$RUNNER_TEMP/dryrun-pub.asc"
+          echo "GPG_KEY_PATH=$RUNNER_TEMP/dryrun-priv.asc" >> "$GITHUB_ENV"
+
+      - name: Build + sign snapshot
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --config .goreleaser/gostow.yaml --clean --snapshot --skip=publish
+        env:
+          VERSION: v0.0.0-dryrun
+          GPG_KEY_PATH: ${{ env.GPG_KEY_PATH }}
+
+      - name: Verify the snapshot signature (cosign checksums)
+        run: |
+          CHECKSUMS=$(ls dist/*checksums.txt)
+          cosign verify-blob \
+            --certificate "${CHECKSUMS}.pem" \
+            --signature   "${CHECKSUMS}.sig" \
+            --certificate-identity-regexp "^https://github\.com/${{ github.repository }}/\.github/workflows/release-dryrun\.yml@" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$CHECKSUMS"
+
+      - name: Verify the package signatures (rpm GPG)
+        run: |
+          shopt -s nullglob
+          rpms=(dist/*.rpm)
+          if [ ${#rpms[@]} -eq 0 ]; then echo "::error::no rpm packages were produced"; exit 1; fi
+          RPMDB=$(mktemp -d)
+          rpmkeys --dbpath "$RPMDB" --import "$RUNNER_TEMP/dryrun-pub.asc"
+          for f in "${rpms[@]}"; do
+            echo "checking $f"
+            rpmkeys --dbpath "$RPMDB" -K "$f" | grep -q "signatures OK" \
+              || { echo "::error::$f is not signed"; exit 1; }
+          done
+          echo "all rpm packages signed"

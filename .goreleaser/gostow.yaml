@@ -1,0 +1,139 @@
+version: 2
+
+project_name: gostow
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: gostow
+    binary: gostow
+    main: ./cmd/gostow
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    # Commit/date ldflags are omitted until the CLI surfaces them; injecting
+    # into vars that don't exist is a silent no-op, and vars that exist but go
+    # unread fail `unused` in lint.
+    ldflags:
+      - -s -w -X main.version={{.Env.VERSION}}
+
+archives:
+  - id: gostow
+    ids: [gostow]
+    name_template: "{{ .ProjectName }}_{{ .Tag }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+
+nfpms:
+  - id: gostow
+    # Unlike dotd (binary `dotd`, package `dot-dagger`), gostow needs no
+    # disambiguation: the binary and the install identity are both `gostow`.
+    # `stow` itself is emphatically NOT claimed — that name belongs to GNU Stow
+    # in every apt/dnf namespace, and gostow is a drop-in, not a replacement
+    # package.
+    package_name: gostow
+    ids: [gostow]
+    file_name_template: "{{ .ConventionalFileName }}"
+    formats:
+      - deb
+      - rpm
+    maintainer: Rocne Scribner <rocne.ks@gmail.com>
+    homepage: https://github.com/rocne/gostow
+    description: GNU Stow, reimplemented in Go — a single static binary, no Perl
+    license: MIT
+    bindir: /usr/bin
+    rpm:
+      signature:
+        key_file: "{{ .Env.GPG_KEY_PATH }}"
+    deb:
+      signature:
+        key_file: "{{ .Env.GPG_KEY_PATH }}"
+
+homebrew_casks:
+  - name: gostow
+    ids: [gostow]
+    repository:
+      owner: rocne
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/rocne/gostow
+    description: GNU Stow, reimplemented in Go — a single static binary, no Perl
+    license: MIT
+    # Binaries are not notarized; strip the Gatekeeper quarantine xattr on install
+    # so the cask-installed gostow runs without "cannot be opened" errors on macOS.
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/gostow"]
+          end
+
+# Publish the signed .deb/.rpm to the Cloudsmith-hosted apt/dnf repo, giving
+# `apt install gostow` / `dnf install gostow` by name with auto-update.
+# (GoReleaser's native `cloudsmiths` block is Pro-only, so we drive the
+# cloudsmith CLI via a custom publisher instead.) Repo-index signing is handled
+# server-side by Cloudsmith using the dedicated repo-signing key — separate from
+# the package-signing key, which never leaves our control.
+#
+# Publishers iterate every linux package and archive artifact, so the command
+# dispatches on extension and pushes only deb/rpm — tar.gz archives are skipped.
+# any-distro/any-version makes one upload installable across every apt/dnf distro
+# rather than maintaining a per-distro matrix.
+publishers:
+  - name: cloudsmith
+    ids: [gostow]
+    cmd: >-
+      sh -c 'case "{{ .ArtifactName }}" in
+      *.deb) exec cloudsmith push deb --republish ${CLOUDSMITH_REPO}/any-distro/any-version "{{ .ArtifactPath }}" ;;
+      *.rpm) exec cloudsmith push rpm --republish ${CLOUDSMITH_REPO}/any-distro/any-version "{{ .ArtifactPath }}" ;;
+      *) true ;;
+      esac'
+    env:
+      - CLOUDSMITH_API_KEY={{ .Env.CLOUDSMITH_API_KEY }}
+      - CLOUDSMITH_REPO={{ .Env.CLOUDSMITH_REPO }}
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Tag }}_checksums.txt"
+
+signs:
+  - cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.sig"
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+
+# Attach both public keys to the GitHub release so a user can verify a downloaded
+# .deb/.rpm by hand, without trusting the Cloudsmith setup script.
+#
+# These are two DIFFERENT keys with different jobs:
+#   gostow-signing-key.asc       signs the packages themselves (fpr A998BF5F…).
+#                                gostow-specific; its private half is the
+#                                GPG_PRIVATE_KEY repo secret.
+#   gostow-repo-signing-key.asc  signs the apt/dnf repo INDEX (fpr 32F6F3B7…).
+#                                Shared: gostow and dot-dagger both publish into
+#                                the Cloudsmith repo rocne/releases, which has one
+#                                index and therefore one key. Its uid still reads
+#                                "dotd repository signing" for historical reasons.
+release:
+  extra_files:
+    - glob: ./gostow-signing-key.asc
+    - glob: ./gostow-repo-signing-key.asc
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"

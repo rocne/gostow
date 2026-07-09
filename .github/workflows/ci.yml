@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # gostow must stay pre-1.0 until the engine is complete: a v1 tag is a promise
+  # of GNU Stow parity we have not earned yet.
+  #
+  # release-please cannot reach 1.0.0 by itself — `bump-minor-pre-major: true`
+  # clamps even a breaking change to a minor bump while major == 0. But three
+  # things can still force it: a `Release-As: 1.0.0` commit footer (which
+  # short-circuits the versioning strategy entirely), flipping that config flag
+  # off, or hand-editing the manifest. All three surface as a manifest value, so
+  # this is where we catch them — on the release PR, before any tag exists.
+  version-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Refuse a 1.0.0-or-later version
+        run: |
+          v=$(jq -er '."."' .release-please-manifest.json)
+          echo "manifest version: $v"
+          case "$v" in
+            0.*) echo "ok: $v is pre-1.0" ;;
+            *)
+              echo "::error::refusing $v — gostow stays pre-1.0 until the stow engine is complete"
+              exit 1
+              ;;
+          esac
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+  # Differential conformance against real GNU Stow. The spec IS stow's behaviour
+  # at the pinned version (docs/SPEC.md §1), so the oracle must be that exact
+  # version — Ubuntu 24.04's `apt install stow` gives 2.3.1 and would silently
+  # redefine the spec. Build the checksum-pinned tarball instead.
+  #
+  # The hermetic half of the suite (checked-in goldens) runs in `test` above with
+  # no Perl at all; this job is what keeps those goldens honest.
+  conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Install build deps for the oracle
+        run: sudo apt-get update && sudo apt-get install -y texinfo
+
+      - name: Build + install pinned GNU Stow oracle
+        run: sudo bash test/install-stow-oracle.sh
+
+      - name: Conformance tests (differential vs real stow)
+        run: go test -tags oracle ./...

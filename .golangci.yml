@@ -1,0 +1,11 @@
+version: "2"
+
+linters:
+  settings:
+    errcheck:
+      # fmt output functions: non-actionable in CLI tools — if writing to
+      # stdout/stderr fails, there is nothing useful the program can do.
+      exclude-functions:
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Fprint
