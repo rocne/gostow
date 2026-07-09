@@ -23,7 +23,26 @@ const StowManualURL = "https://www.gnu.org/software/stow/manual/"
 // here is fixed to "gostow" rather than following basename($0), because it names
 // the tool and not the invocation — see §4.4.1.
 func IdentityLine(version string) string {
-	return fmt.Sprintf("gostow %s (GNU Stow %s compatible)", version, StowVersion)
+	return fmt.Sprintf("gostow %s (GNU Stow %s compatible)", semver(version), StowVersion)
+}
+
+// semver strips the leading "v" a git tag carries.
+//
+// The release pipeline injects release-please's tag_name — "v0.1.0" — into
+// main.version, so v0.1.0 shipped announcing itself as "gostow v0.1.0" while the
+// spec, the docs and every test said "gostow 0.1.0". Nothing caught it because
+// nothing ever fed a test the value the pipeline actually supplies: the tests all
+// passed a hand-written "0.1.0".
+//
+// Normalising here rather than in the workflow keeps the fix inside the binary,
+// where it holds however the version arrives — `go build -ldflags` by hand,
+// goreleaser, or a distro packager. "dev" and any non-version string pass through
+// untouched.
+func semver(version string) string {
+	if len(version) > 1 && version[0] == 'v' && version[1] >= '0' && version[1] <= '9' {
+		return version[1:]
+	}
+	return version
 }
 
 // usageText is gostow's help block, written in gostow's own words.

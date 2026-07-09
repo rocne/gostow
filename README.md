@@ -34,6 +34,16 @@ To use it as a true drop-in, install it as `stow`. gostow takes its program name
 $ install -m755 gostow /usr/local/bin/stow
 ```
 
+Release archives carry a sigstore build provenance attestation. Verify one with:
+
+```console
+$ gh attestation verify gostow_v0.1.0_linux_amd64.tar.gz \
+    --repo rocne/gostow --signer-repo rocne/release-ci
+```
+
+`--signer-repo` is required: the artifacts are built and signed by a reusable workflow that
+lives in `rocne/release-ci`, so that — not `rocne/gostow` — is the signing identity.
+
 ## What's different
 
 Almost nothing, on purpose. The exhaustive list is in **[docs/DIVERGENCES.md](docs/DIVERGENCES.md)**,
