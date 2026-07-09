@@ -659,12 +659,13 @@ See PL-15 for the `$`-vs-newline divergence.
 
 All ledger items are now ruled. What remains:
 
-- **Verbosity ≥3 output** is not implemented. PL-11 owes only *semantic* equivalence there,
-  but the guarantee's testable form — that the level-0–2 subsequence matches byte-for-byte
-  at any verbosity — is not yet enforced by a test.
-- **Port `ignore.t`** (287 assertions). The matcher is implemented and differentially
-  tested, but stow's own suite encodes *intent*, and would catch a case where gostow and
-  stow agree because gostow copied a misreading.
+Nothing. Every ledger item is ruled, every slice in `TEST-PLAN.md` §5 is implemented, and
+each is pinned by a differential test against the pinned oracle.
+
+What that claim does **not** mean: parity is evidenced, not proved. The suite compares 6307
+argv vectors against real `Getopt::Long`, 1140 ignore verdicts against `Stow.pm`'s own
+`ignore()`, and 60 whole-invocation fixtures against the real binary — stdout bytes, stderr
+bytes, exit code and resulting tree. A fixture nobody wrote is a behaviour nobody checked.
 
 ### Settled (2026-07-09)
 

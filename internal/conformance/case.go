@@ -91,7 +91,15 @@ func (c Case) environ(root string) []string {
 // comparison.
 func (c Case) Exec(t *testing.T, bin string) Run {
 	t.Helper()
-	root := t.TempDir()
+	run, _ := c.ExecAt(t, bin, t.TempDir())
+	return run
+}
+
+// ExecAt is Exec with the sandbox root supplied and returned, for tests that
+// must normalise the root out of the streams themselves — stow prints absolute
+// paths at verbosity 2 and above.
+func (c Case) ExecAt(t *testing.T, bin, root string) (Run, string) {
+	t.Helper()
 	if err := c.Materialize(root); err != nil {
 		t.Fatalf("materialize case %q: %v", c.Name, err)
 	}
@@ -101,5 +109,5 @@ func (c Case) Exec(t *testing.T, bin string) Run {
 		t.Fatalf("snapshot case %q: %v", c.Name, err)
 	}
 	run.Tree = tree
-	return run
+	return run, root
 }
