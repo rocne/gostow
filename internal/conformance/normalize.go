@@ -33,3 +33,31 @@ var reIdentity = regexp.MustCompile(`(?m)^(?:gostow \S+ \(GNU Stow \d+\.\d+\.\d+
 func NormalizeIdentity(s string) string {
 	return reIdentity.ReplaceAllString(s, "<IDENTITY>")
 }
+
+// StripExtensionLines removes every line naming a gostow extension.
+//
+// gostow's --help lists its own flags, which GNU Stow obviously does not. Every
+// extension line contains the literal "--gostow-" and none of them adds a blank
+// line, so deleting them leaves stow's block byte for byte. That is what makes
+// the additive help text *checkable* rather than merely asserted: the
+// differential suite strips these lines and then demands byte equality on
+// everything else — the synopsis, the wording, the spacing, the trailing
+// addresses.
+//
+// It is applied to both sides. Real stow's output never contains the token, so
+// stripping is a no-op there and the comparison stays honest.
+//
+// This is not a licence to normalise anything else. A fixture whose *argv* names
+// an extension is refused outright by AssertSameAsOracle: gostow's extended
+// behaviour is never compared against an oracle that never saw the flag.
+func StripExtensionLines(s string) string {
+	lines := strings.Split(s, "\n")
+	kept := lines[:0]
+	for _, line := range lines {
+		if strings.Contains(line, "--gostow-") {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	return strings.Join(kept, "\n")
+}

@@ -26,14 +26,57 @@ func TestExtensionFlagsAreNotAbbreviatable(t *testing.T) {
 	}
 }
 
-func TestExtensionFlagsAreAbsentFromHelp(t *testing.T) {
+// The extensions are listed in --help: a flag nobody can discover is a flag
+// nobody uses. Byte parity survives because the differential suite deletes the
+// lines naming them, which requires the shape asserted below.
+func TestExtensionFlagsAreVisibleInHelp(t *testing.T) {
 	root := fixture(t)
 	stdout, _, code := run(t, root, map[string]string{"HOME": filepath.Join(root, "home")}, "--help")
 	if code != 0 {
 		t.Fatalf("exit = %d, want 0", code)
 	}
-	if strings.Contains(stdout, "gostow-") {
-		t.Error("--help must reproduce stow's block byte-for-byte; extensions cannot appear in it")
+	for _, want := range []string{"--gostow-fix", "--gostow-help"} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("--help should list %s", want)
+		}
+	}
+}
+
+// The invariant the differential suite depends on: deleting every line that
+// contains "--gostow-" must leave GNU Stow's help block untouched. So no
+// extension line may be blank, and none may be a continuation of another.
+// Breaking this would make the parity comparison silently wrong rather than red.
+func TestExtensionHelpLinesAreDeletableWithoutTrace(t *testing.T) {
+	root := fixture(t)
+	stdout, _, _ := run(t, root, map[string]string{"HOME": filepath.Join(root, "home")}, "--help")
+
+	var kept []string
+	removed := 0
+	for _, line := range strings.Split(stdout, "\n") {
+		if strings.Contains(line, "--gostow-") {
+			if strings.TrimSpace(line) == "" {
+				t.Error("an extension line is blank; deleting it would eat a blank line stow prints")
+			}
+			removed++
+			continue
+		}
+		kept = append(kept, line)
+	}
+	if removed != 2 {
+		t.Errorf("removed %d extension lines, want 2", removed)
+	}
+
+	stripped := strings.Join(kept, "\n")
+	if strings.Contains(stripped, "gostow-") {
+		t.Error("a continuation line survived: every extension line must name the flag")
+	}
+	// stow's block ends "-h, --help ...\n\nReport bugs to:". If an extension line
+	// had carried a blank, we would see three newlines here.
+	if strings.Contains(stripped, "\n\n\nReport bugs to:") {
+		t.Error("deleting the extension lines left a stray blank line")
+	}
+	if !strings.Contains(stripped, "-h, --help            Show this help\n\nReport bugs to:") {
+		t.Error("stripped help does not rejoin stow's block exactly")
 	}
 }
 
