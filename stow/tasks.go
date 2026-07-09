@@ -41,6 +41,46 @@ type Task struct {
 	skip bool
 }
 
+// An operation is one line of stow's level-1 log. There is exactly one printer
+// for all of them (logOp), because stow has none — it prints these ad hoc, and
+// the inconsistency below is the visible consequence.
+type operation struct {
+	name string
+	// colon is false for RMDIR alone. Every sibling prints "LINK:", "UNLINK:",
+	// "MKDIR:", "MV:"; RMDIR prints "RMDIR /path". That is reproducible and
+	// dependable, so parity replicates it verbatim — it is declared here rather
+	// than hidden in a format string, where it reads as a typo somebody will
+	// helpfully "fix". Options.FixQuirks gives it the colon its siblings have.
+	colon bool
+}
+
+var (
+	opLink   = operation{name: "LINK", colon: true}
+	opUnlink = operation{name: "UNLINK", colon: true}
+	opMkdir  = operation{name: "MKDIR", colon: true}
+	opRmdir  = operation{name: "RMDIR", colon: false}
+	opMv     = operation{name: "MV", colon: true}
+)
+
+// opNote is the parenthetical stow appends when a task cancels another.
+type opNote string
+
+const (
+	noteNone      opNote = ""
+	noteDuplicate opNote = " (duplicates previous action)"
+	noteRevert    opNote = " (reverts previous action)"
+)
+
+// logOp writes one operation line. Every LINK/UNLINK/MKDIR/RMDIR/MV in the
+// engine goes through here.
+func (e *engine) logOp(op operation, note opNote, detail string) {
+	separator := ":"
+	if !op.colon && !e.opts.FixQuirks {
+		separator = ""
+	}
+	e.debug(1, 0, "%s%s %s%s", op.name, separator, detail, note)
+}
+
 // planner holds the two-phase plan: an ordered task list plus the indices stow
 // keeps beside it, which together form a virtual filesystem overlaid on the real
 // one. Every predicate below asks the plan first and the disk second, so that
@@ -161,14 +201,18 @@ func (e *engine) readALink(link string) (string, error) {
 	return dest, nil
 }
 
+func linkDetail(linkSrc, linkDest string) string {
+	return fmt.Sprintf("%s => %s", linkSrc, linkDest)
+}
+
 func (e *engine) doLink(linkDest, linkSrc string) {
 	if t, ok := e.plan.linkTaskFor[linkSrc]; ok {
 		switch {
 		case t.Action == TaskCreate && t.Source == linkDest:
-			e.debug(1, 0, "LINK: %s => %s (duplicates previous action)", linkSrc, linkDest)
+			e.logOp(opLink, noteDuplicate, linkDetail(linkSrc, linkDest))
 			return
 		case t.Action == TaskRemove && t.Source == linkDest:
-			e.debug(1, 0, "LINK: %s => %s (reverts previous action)", linkSrc, linkDest)
+			e.logOp(opLink, noteRevert, linkDetail(linkSrc, linkDest))
 			t.skip = true
 			delete(e.plan.linkTaskFor, linkSrc)
 			return
@@ -177,7 +221,7 @@ func (e *engine) doLink(linkDest, linkSrc string) {
 		// both the removal and this creation, which is how --override relinks.
 	}
 
-	e.debug(1, 0, "LINK: %s => %s", linkSrc, linkDest)
+	e.logOp(opLink, noteNone, linkDetail(linkSrc, linkDest))
 	t := &Task{Action: TaskCreate, Type: TypeLink, Path: linkSrc, Source: linkDest}
 	e.plan.tasks = append(e.plan.tasks, t)
 	e.plan.linkTaskFor[linkSrc] = t
@@ -187,10 +231,10 @@ func (e *engine) doUnlink(file string) error {
 	if t, ok := e.plan.linkTaskFor[file]; ok {
 		switch t.Action {
 		case TaskRemove:
-			e.debug(1, 0, "UNLINK: %s (duplicates previous action)", file)
+			e.logOp(opUnlink, noteDuplicate, file)
 			return nil
 		case TaskCreate:
-			e.debug(1, 0, "UNLINK: %s (reverts previous action)", file)
+			e.logOp(opUnlink, noteRevert, file)
 			t.skip = true
 			delete(e.plan.linkTaskFor, file)
 			return nil
@@ -200,7 +244,7 @@ func (e *engine) doUnlink(file string) error {
 	// a hashref to a string. That is always false, so the guard never fires.
 	// Ledger PL-08: dead code, not replicated.
 
-	e.debug(1, 0, "UNLINK: %s", file)
+	e.logOp(opUnlink, noteNone, file)
 	source, err := os.Readlink(e.real(file))
 	if err != nil {
 		return fatalf("could not readlink %s (%v)", file, err)
@@ -215,38 +259,37 @@ func (e *engine) doMkdir(dir string) {
 	if t, ok := e.plan.dirTaskFor[dir]; ok {
 		switch t.Action {
 		case TaskCreate:
-			e.debug(1, 0, "MKDIR: %s (duplicates previous action)", dir)
+			e.logOp(opMkdir, noteDuplicate, dir)
 			return
 		case TaskRemove:
-			e.debug(1, 0, "MKDIR: %s (reverts previous action)", dir)
+			e.logOp(opMkdir, noteRevert, dir)
 			t.skip = true
 			delete(e.plan.dirTaskFor, dir)
 			return
 		}
 	}
 
-	e.debug(1, 0, "MKDIR: %s", dir)
+	e.logOp(opMkdir, noteNone, dir)
 	t := &Task{Action: TaskCreate, Type: TypeDir, Path: dir}
 	e.plan.tasks = append(e.plan.tasks, t)
 	e.plan.dirTaskFor[dir] = t
 }
 
-// doRmdir has no colon after RMDIR, unlike every sibling operation. Reproducible
-// and defined, so ledger PL-05 rules it replicated verbatim.
+// doRmdir prints without a colon; see the operation table above (ledger PL-05).
 //
 // stow's dir_task_for branch here reads the *link* task table and is unreachable
 // dead code (ledger PL-06, probed): do_rmdir runs only from fold_tree during
 // plan_unstow, which precedes plan_stow, so no dir task can exist for dir yet.
 // The branch is therefore omitted rather than reproduced.
 func (e *engine) doRmdir(dir string) {
-	e.debug(1, 0, "RMDIR %s", dir)
+	e.logOp(opRmdir, noteNone, dir)
 	t := &Task{Action: TaskRemove, Type: TypeDir, Path: dir}
 	e.plan.tasks = append(e.plan.tasks, t)
 	e.plan.dirTaskFor[dir] = t
 }
 
 func (e *engine) doMv(src, dst string) {
-	e.debug(1, 0, "MV: %s -> %s", src, dst)
+	e.logOp(opMv, noteNone, fmt.Sprintf("%s -> %s", src, dst))
 	e.plan.tasks = append(e.plan.tasks, &Task{Action: TaskMove, Type: TypeFile, Path: src, Source: dst})
 }
 

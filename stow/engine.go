@@ -50,6 +50,26 @@ type Options struct {
 	Defer     []string
 	Override  []string
 	Log       io.Writer // nil means io.Discard; the CLI passes os.Stderr
+
+	// FixQuirks abandons byte-and-behaviour parity with GNU Stow in the small,
+	// enumerated set of places where stow's behaviour is a defect rather than a
+	// contract. It is off by default, because gostow's promise is to *be* stow.
+	//
+	// This is the seam for a consumer that wants stow's engine without stow's
+	// warts — it is a library parameter first, and the CLI's hidden
+	// --gostow-fix second. What it changes is listed in docs/DIVERGENCES.md; the
+	// sites are:
+	//
+	//   - stowContents passes the target subdir, not the package subdir, to
+	//     shouldSkipTarget, closing the --dotfiles protection bypass below.
+	//   - RMDIR prints with a colon, like every other operation.
+	//   - the CLI gains .stowrc comments, and stops discarding the packages
+	//     after a "--".
+	//
+	// It deliberately does *not* fix stow's two documented algorithmic bugs
+	// (the empty-directory problem; folding across stow directories). Those are
+	// real work, not a flag.
+	FixQuirks bool
 }
 
 // Conflict is one reason an Apply refused to touch the filesystem.
@@ -294,10 +314,6 @@ func (e *engine) readdirSorted(p string) ([]string, error) {
 }
 
 // shouldSkipTarget protects stow directories from being stowed into.
-//
-// Ledger PL-04: stowContents passes the *package* subdir here while
-// unstowContents passes the *target* subdir. Under --dotfiles those differ, so
-// stowing bypasses a protection that unstowing honours. Replicated for v1.
 func (e *engine) shouldSkipTarget(target string) bool {
 	if target == e.stowPath {
 		fmt.Fprintf(e.log, "WARNING: skipping target which was current stow directory %s\n", target)
@@ -324,7 +340,17 @@ func (e *engine) exists(p string) bool {
 }
 
 func (e *engine) stowContents(stowPath, pkg, pkgSubdir, targetSubdir string) error {
-	if e.shouldSkipTarget(pkgSubdir) {
+	// Ledger PL-04, and the one place stow's mistake is shaped into this code.
+	// unstowContents asks shouldSkipTarget about the *target* subdir; stow asks
+	// about the *package* subdir. Under --dotfiles the two names differ ("dot-foo"
+	// vs ".foo"), so stowing walks straight past a .stow guard that unstowing
+	// respects — and worse, creates files inside it that the matching unstow then
+	// refuses to remove. Replicated for parity; FixQuirks asks the right question.
+	guarded := pkgSubdir
+	if e.opts.FixQuirks {
+		guarded = targetSubdir
+	}
+	if e.shouldSkipTarget(guarded) {
 		return nil
 	}
 	e.debug(3, 0, "Stowing contents of %s / %s / %s", stowPath, pkg, pkgSubdir)

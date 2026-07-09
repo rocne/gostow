@@ -4,6 +4,7 @@ package conformance
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -14,6 +15,17 @@ import (
 // entry.
 func AssertSameAsOracle(t *testing.T, c Case) {
 	t.Helper()
+
+	// A parity fixture must be argv real stow could have been given. gostow's own
+	// extensions are prefixed "gostow-" precisely so this guard can exist: using
+	// one here would compare gostow against an oracle that never saw the flag,
+	// and the suite would quietly stop testing parity. Forbid, do not filter.
+	for _, arg := range append(append([]string{}, c.Args...), c.Pre...) {
+		if strings.HasPrefix(arg, "--gostow-") {
+			t.Fatalf("fixture %q passes the gostow extension %q to the parity suite; "+
+				"extensions belong in the extension tests, never here", c.Name, arg)
+		}
+	}
 
 	oracle := OraclePath(t)
 	gostow := GostowPath(t)

@@ -50,6 +50,13 @@ const (
 type Option struct {
 	Names []string
 	Arg   ArgKind
+
+	// NoAbbrev keeps this option out of prefix matching: it answers only to its
+	// exact name. gostow's own extensions set it, so that adding "--gostow-fix"
+	// cannot make "--g" resolve to something real stow would have rejected.
+	// Without it, every extension would quietly redefine an abbreviation, and
+	// the parser would stop being a faithful Getopt::Long for ordinary argv.
+	NoAbbrev bool
 }
 
 // Event is one parsed token, in the order it appeared. Order is load-bearing:
@@ -87,7 +94,9 @@ var intLiteral = regexp.MustCompile(`^[-+]?[0-9]+$`)
 type table struct {
 	byName  map[string]*Option
 	byShort map[byte]*Option
-	names   []string
+	// names holds only the abbreviatable names, so NoAbbrev options neither
+	// answer to a prefix nor appear in an "is ambiguous" list.
+	names []string
 }
 
 func newTable(opts []Option) *table {
@@ -96,7 +105,9 @@ func newTable(opts []Option) *table {
 		o := &opts[i]
 		for _, n := range o.Names {
 			t.byName[n] = o
-			t.names = append(t.names, n)
+			if !o.NoAbbrev {
+				t.names = append(t.names, n)
+			}
 			if len(n) == 1 {
 				t.byShort[n[0]] = o
 			}

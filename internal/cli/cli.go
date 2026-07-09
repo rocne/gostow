@@ -89,7 +89,7 @@ func (a *app) run(argv []string) (int, error) {
 		return code, nil
 	}
 
-	rcTokens, err := readStowrcTokens()
+	rcTokens, err := readStowrcTokens(cli.fixQuirks)
 	if err != nil {
 		return 0, err
 	}
@@ -141,6 +141,10 @@ func (a *app) finishParse(p parsed) (int, bool) {
 	}
 	if p.help {
 		return a.usage("", false), true
+	}
+	if p.gostowHelp {
+		fmt.Fprint(a.stdout, extensionHelp(a.version))
+		return exitOK, true
 	}
 	if p.version {
 		fmt.Fprintln(a.stdout, IdentityLine(a.version))
@@ -223,6 +227,7 @@ func (a *app) apply(p parsed, dir, target string) (int, error) {
 		Adopt:     p.adopt,
 		Compat:    p.compat,
 		Simulate:  p.simulate,
+		FixQuirks: p.fixQuirks,
 		Verbosity: p.verbosity(),
 		Ignore:    p.ignore,
 		Defer:     p.deferred,

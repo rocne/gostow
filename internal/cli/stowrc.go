@@ -19,7 +19,12 @@ import (
 // which means ./.stowrc overrides ~/.stowrc. gostow follows the code.
 //
 // A file that exists but is not readable is silently skipped: stow tests -r.
-func readStowrcTokens() ([]string, error) {
+//
+// fixQuirks enables real comment syntax. Without it, '#' is an ordinary word
+// character to shellwords, so `--ignore=x # note` yields three tokens; the last
+// two are read as package names and rc package names are discarded — which is
+// why .stowrc comments appear to work by accident (ledger PL-02).
+func readStowrcTokens(fixQuirks bool) ([]string, error) {
 	var files []string
 	if home, ok := os.LookupEnv("HOME"); ok {
 		files = append(files, filepath.Join(home, ".stowrc"))
@@ -34,7 +39,11 @@ func readStowrcTokens() ([]string, error) {
 		}
 		sc := bufio.NewScanner(f)
 		for sc.Scan() {
-			words, err := shellwords(sc.Text())
+			line := sc.Text()
+			if fixQuirks {
+				line = stripComment(line)
+			}
+			words, err := shellwords(line)
 			if err != nil {
 				_ = f.Close()
 				return nil, err
@@ -103,6 +112,19 @@ func shellwords(line string) ([]string, error) {
 		words = append(words, cur.String())
 	}
 	return words, nil
+}
+
+// stripComment removes an unescaped '#' and everything after it.
+func stripComment(line string) string {
+	for i := 0; i < len(line); i++ {
+		switch line[i] {
+		case '\\':
+			i++
+		case '#':
+			return line[:i]
+		}
+	}
+	return line
 }
 
 var (

@@ -28,6 +28,15 @@ func spec() []getopt.Option {
 		{Names: []string{"D", "delete"}},
 		{Names: []string{"S", "stow"}},
 		{Names: []string{"R", "restow"}},
+
+		// gostow's own extensions. Three rules keep them from denting parity:
+		// they are prefixed "gostow-", they are NoAbbrev (so adding them cannot
+		// make "--g" resolve to anything real stow would have rejected), and they
+		// are absent from --help, whose bytes are part of the contract.
+		// docs/DIVERGENCES.md is where they are documented; --gostow-help prints
+		// them. The parity suite forbids any fixture from using them.
+		{Names: []string{"gostow-fix"}, NoAbbrev: true},
+		{Names: []string{"gostow-help"}, NoAbbrev: true},
 	}
 }
 
@@ -49,15 +58,21 @@ type parsed struct {
 	override  []string
 	deferred  []string
 
+	// gostow's own extensions; see spec().
+	fixQuirks  bool
+	gostowHelp bool
+
 	// requests preserves the order of -D/-S/-R and the package names they
 	// govern. rc files parse into these too, and then discard them.
 	requests []stow.Request
+	// leftover is what followed "--". stow discards it; --gostow-fix keeps it.
+	leftover []string
 	errors   []string
 }
 
 func parseArgs(args []string) parsed {
 	res := getopt.Parse(spec(), args)
-	p := parsed{errors: res.Errors}
+	p := parsed{errors: res.Errors, leftover: res.Leftover}
 
 	action := stow.ActionStow
 	addPkg := func(name string) {
@@ -103,6 +118,10 @@ func parseArgs(args []string) parsed {
 			p.noFolding = true
 		case "dotfiles":
 			p.dotfiles = true
+		case "gostow-fix":
+			p.fixQuirks = true
+		case "gostow-help":
+			p.gostowHelp = true
 		case "dir":
 			v := e.Value
 			p.dir = &v
@@ -116,6 +135,16 @@ func parseArgs(args []string) parsed {
 		case "defer":
 			p.deferred = append(p.deferred, e.Value)
 		}
+	}
+
+	// stow hands the arguments after "--" back in an array it never reads, so
+	// `stow -- pkg` silently drops pkg and dies with "No packages to stow or
+	// unstow" (ledger PL-03). Fails loudly, but it fails.
+	if p.fixQuirks {
+		for _, name := range p.leftover {
+			addPkg(name)
+		}
+		p.leftover = nil
 	}
 	return p
 }
@@ -144,6 +173,7 @@ func merge(rc, cli parsed) parsed {
 	out.adopt = cli.adopt || rc.adopt
 	out.noFolding = cli.noFolding || rc.noFolding
 	out.dotfiles = cli.dotfiles || rc.dotfiles
+	out.fixQuirks = cli.fixQuirks || rc.fixQuirks
 	return out
 }
 
