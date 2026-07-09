@@ -29,8 +29,14 @@ answer to `stow`.
 $ brew install --cask rocne/tap/gostow
 ```
 
-It is a cask, so this is macOS only — Homebrew on Linux does not install casks. Use the
-tarball or `go install` there.
+**A cask, not a formula, and `gostow` still lands on your `PATH`.** Casks are no longer just
+GUI apps: the cask's `binary "gostow"` stanza symlinks the executable into
+`$(brew --prefix)/bin` exactly as a formula would. It is a cask because Homebrew's
+[Acceptable Formulae](https://docs.brew.sh/Acceptable-Formulae) policy says *"binary-only
+formulae should go in homebrew/cask"* — formulae are meant to build from source, and gostow
+ships pre-compiled binaries. GoReleaser deprecated its formula output for the same reason.
+
+Homebrew treats Cask as a macOS feature. On Linux, use the tarball or `go install` below.
 
 ### Debian, Ubuntu — apt
 
@@ -46,15 +52,29 @@ $ curl -1sLf https://dl.cloudsmith.io/public/rocne/releases/setup.rpm.sh | sudo 
 $ sudo dnf install -y gostow
 ```
 
-Both setup scripts add the public [`rocne/releases`](https://cloudsmith.io/~rocne/repos/releases/)
-repository and import its signing key. Packages are GPG-signed, and so is the repository
-index. If you would rather not pipe a script into a root shell, download it, read it, and
-run it — it writes a source list and imports one key. Both public keys are attached to
-every release: `gostow-signing-key.asc` signs the packages, `gostow-repo-signing-key.asc`
-signs the repository index.
+Each is two steps: **register the repository, then install from it with your usual package
+manager.** The first line fetches Cloudsmith's setup script and runs it as root — it writes
+an apt source list (or a dnf `.repo` file) and imports the repository's signing key.
+`-1sLf` is curl for *TLSv1.0 or better, quiet, follow redirects, and fail loudly on an HTTP
+error rather than piping an error page into a shell*; `sudo -E` keeps your environment so
+the script can see a proxy if you have one.
 
-Each release is installed from these repositories, on Ubuntu 24.04 and Fedora 41, by CI
-before it is announced. If the instructions above stop working, the release fails.
+Piping a script into a root shell is a real thing to be uneasy about. You do not have to:
+
+```console
+$ curl -1sLf -O https://dl.cloudsmith.io/public/rocne/releases/setup.deb.sh
+$ less setup.deb.sh          # it adds one source list and imports one key
+$ sudo -E bash setup.deb.sh
+```
+
+The repository is public — [`rocne/releases`](https://cloudsmith.io/~rocne/repos/releases/) —
+and both the packages and the repository index are GPG-signed. Both public keys are attached
+to every GitHub release: `gostow-signing-key.asc` signs the packages,
+`gostow-repo-signing-key.asc` signs the index.
+
+Every release is installed from these repositories, on Ubuntu 24.04 and Fedora 41, by CI
+before it is announced. If the instructions above stop working, the release fails rather
+than these docs quietly going stale.
 
 ### Any linux or macOS — tarball
 

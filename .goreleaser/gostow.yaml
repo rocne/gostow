@@ -63,6 +63,16 @@ nfpms:
       signature:
         key_file: "{{ .Env.GPG_KEY_PATH }}"
 
+# A cask, not a formula, and that surprises people: casks were once GUI-only.
+#
+# Homebrew's Acceptable Formulae policy is explicit — "binary-only formulae should
+# go in homebrew/cask" — because a formula is meant to build from source, and this
+# tap ships pre-compiled binaries. GoReleaser reached the same conclusion and
+# deprecated its `brews:` (formula) output in favour of `homebrew_casks:` in v2.10.
+#
+# The `binary` stanza it generates symlinks the executable into
+# $(brew --prefix)/bin, so `brew install --cask` still puts `gostow` on PATH. Cask
+# is a macOS feature; linux users take the tarball, a .deb/.rpm, or `go install`.
 homebrew_casks:
   - name: gostow
     ids: [gostow]
