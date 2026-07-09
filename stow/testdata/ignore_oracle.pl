@@ -9,7 +9,9 @@
 # .stow-local-ignore relative to it, exactly as within_target_do() arranges.
 use strict;
 use warnings;
-use lib $ENV{STOW_PERL_LIB};
+# STOW_PERL_LIB is empty when the oracle's module dir is already in @INC, which
+# is what stow's build does when it installs into a prefix Perl already searches.
+BEGIN { unshift @INC, $ENV{STOW_PERL_LIB} if length($ENV{STOW_PERL_LIB} // ''); }
 use Stow;
 
 my $stow = Stow->new(dir => $ENV{ORACLE_STOW_DIR}, target => $ENV{ORACLE_TARGET});

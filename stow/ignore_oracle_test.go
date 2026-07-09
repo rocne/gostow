@@ -159,17 +159,22 @@ func runIgnoreOracle(t *testing.T, perlLib, root, home string, paths []string) [
 	return got
 }
 
-// reUseLib captures the module directory stow's own build baked into it.
+// reUseLib captures the module directory stow's build baked into its script. The
+// line is absent when the install prefix is already in Perl's @INC, so its
+// absence is normal, not an error.
 var reUseLib = regexp.MustCompile(`(?m)^use lib "([^"]+)";`)
 
-// findPerlLib asks the oracle where its modules are, rather than guessing. stow's
-// build substitutes a literal `use lib "<pmdir>";` into the installed script, and
-// the directory it names depends on both the install prefix and the Perl version
-// (2.4.1 built against perl 5.40 lands in share/perl5/5.40). Guessing that layout
-// is how this test came to skip silently in CI while passing locally.
+// findPerlLib returns the directory the ignore oracle must prepend to @INC to
+// load the *pinned* Stow.pm, or "" when Perl already finds it.
 //
-// An oracle binary without a readable Stow.pm is a broken installation: fail,
-// never skip. A conformance test that skips is a vacuous pass.
+// Guessing the layout is what made this test skip silently in CI while passing
+// locally: 2.4.1 built against perl 5.40 lands in share/perl5/5.40, and a
+// /usr/local install may need no `use lib` at all. So the oracle's own script is
+// read for the answer, and then Perl is asked to prove it can load Stow 2.4.1.
+//
+// Every failure here is fatal, never a skip: an oracle binary whose module cannot
+// be loaded is a broken installation, and a conformance test that skips is a
+// vacuous pass.
 func findPerlLib(t *testing.T, oracleBin string) string {
 	t.Helper()
 
@@ -177,13 +182,22 @@ func findPerlLib(t *testing.T, oracleBin string) string {
 	if err != nil {
 		t.Fatalf("reading the oracle script %s: %v", oracleBin, err)
 	}
-	m := reUseLib.FindSubmatch(script)
-	if m == nil {
-		t.Fatalf(`no 'use lib "..."' line in the oracle script %s`, oracleBin)
+	dir := ""
+	if m := reUseLib.FindSubmatch(script); m != nil {
+		dir = string(m[1])
 	}
-	dir := string(m[1])
-	if _, err := os.Stat(filepath.Join(dir, "Stow.pm")); err != nil {
-		t.Fatalf("Stow.pm not found in %s, named by the oracle script %s: %v", dir, oracleBin, err)
+
+	args := []string{}
+	if dir != "" {
+		args = append(args, "-I"+dir)
+	}
+	args = append(args, "-MStow", "-e", "print $Stow::VERSION")
+	out, err := exec.Command("perl", args...).Output()
+	if err != nil {
+		t.Fatalf("perl cannot load the pinned Stow.pm (lib=%q, from %s): %v", dir, oracleBin, err)
+	}
+	if got := strings.TrimSpace(string(out)); got != "2.4.1" {
+		t.Fatalf("perl loaded Stow %s, want 2.4.1: a mismatched module would redefine the spec", got)
 	}
 	return dir
 }
