@@ -99,9 +99,9 @@ func TestRemoveParentRefs(t *testing.T) {
 		{"a/../b", "b"},
 		{"a/..", ""},
 		{"/a/../b", "/b"},
-		{"../..", "../.."},          // ".." segments are never cancelled
-		{"../a/../b", "../b"},       // the leading ".." survives
-		{"..foo/../b", "..foo/../b"} /* lookahead rejects any ".."-prefixed segment */,
+		{"../..", "../.."},           // ".." segments are never cancelled
+		{"../a/../b", "../b"},        // the leading ".." survives
+		{"..foo/../b", "..foo/../b"}, /* lookahead rejects any ".."-prefixed segment */
 		{"a/b/../../c", "c"},
 		{"a/./../b", "a/b"}, // "." matches [^/]+, so it is the segment that gets cancelled
 	}
