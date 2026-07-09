@@ -79,12 +79,41 @@ The reusable *plumbing* (colored cobra help/usage templates, ~100 lines) may be
 parity, so gostow's house-style latitude is small by design. Do not extract a shared
 UI library yet — that waits until `dstow` is a second real consumer (Rule of Three).
 
+## The pinned conformance referent
+
+**GNU Stow 2.4.1** (2024-09-08). The spec IS stow's behavior at this version.
+
+Real stow 2.4.1 is an **executable oracle** — this project's specification can be
+*run*. Install it with `test/install-stow-oracle.sh`, which builds the
+checksum-pinned tarball from source. Do **not** `apt install stow`: Ubuntu 24.04
+ships 2.3.1, which would silently redefine the spec.
+
+When this document, `docs/SPEC.md`, and the real binary disagree, **the binary wins.**
+
 ## Validation steps
 
 - `go build ./...`, `go vet ./...`, `go test ./...` before committing.
-- **Conformance:** the symlink engine is validated test-first against real GNU stow's
-  documented behavior at the pinned version. Treat stow's own test suite / manual as
-  the conformance spec.
+  (Note `go build ./...` drops a `gostow` binary at the repo root; it's gitignored.)
+- `golangci-lint run ./...` — `unused` will fail the build on an unreferenced
+  package-level var, so don't add ldflags targets before something reads them.
+- `actionlint` before touching `.github/workflows/`.
+- **Conformance:** `go test ./...` is hermetic (goldens, no Perl).
+  `go test -tags oracle ./...` runs the differential suite against real stow.
+
+## Versioning — gostow stays pre-1.0
+
+**A `v1` tag is a promise of stow parity we have not earned.** Until the engine is
+complete, every release is `v0.x`. Four layers enforce this; don't weaken any of
+them without a deliberate decision:
+
+- `initial-version: 0.1.0` in `release-please-config.json`. Without it release-please
+  proposes **1.0.0** on a first release — `bump-minor-pre-major` does not prevent this,
+  because the initial-release path never bumps anything.
+- `guard-release-pr` in `release-please.yml`. `ci.yml`'s `version-guard` **cannot** see
+  release-please's own PR: GitHub never triggers `pull_request` workflows for
+  `GITHUB_TOKEN`-authored PRs.
+- `version-guard` in `ci.yml`, for human PRs touching the manifest.
+- `guard-pre-1-0` in both release workflows — the hard stop before anything is published.
 
 ## Commit and Push Cadence
 
@@ -94,6 +123,35 @@ rather than opening a new one.
 
 ## Documentation
 
-Claude reference docs live in `.claude/docs/`. Start each session by reading
-`CLAUDE.md` and the concept doc `gostow-dstow-concept-2026-07-09.md` (carried over
-from dot-dagger). Defer other files until the task needs them.
+Start each session by reading, in order:
+
+1. `CLAUDE.md` (this file).
+2. **`docs/SPEC.md`** — the conformance spec. Every claim is tagged `[probed]`
+   (verified by running real stow), `[source]` (read from stow's Perl), or
+   `[inferred]` (deduced, **not yet verified — do not rely on it**).
+   §10 is the **Parity Ledger**: every stow quirk, its tier, and its ruling.
+3. **`docs/TEST-PLAN.md`** — seams (S1/S2/S3, signed off), the differential-oracle +
+   goldens strategy, and §5's vertical slice order. Build in that order.
+
+Defer `.claude/docs/gostow-dstow-concept-2026-07-09.md` (design capture, carried over
+from dot-dagger) until the task needs it — `docs/SPEC.md` supersedes it on anything
+concrete.
+
+### Current state (2026-07-09)
+
+Release pipeline is live and green; `docs/SPEC.md` and `docs/TEST-PLAN.md` are written.
+**No engine exists.** `cmd/gostow` answers `--version` and exits 2 on anything else.
+
+Owed before implementation:
+
+- **Probe PL-06, PL-09, PL-10** against the real binary. They are `[inferred]` from
+  reading the Perl, and their tier — and therefore whether we replicate them — is
+  undecided until probed.
+- **Slice 3 (`internal/getopt`) is load-bearing and easy to underestimate.**
+  `Getopt::Long`'s `bundling` + `permute` + `no_ignore_case` + `auto_abbrev` +
+  `-v:+` semantics cannot be expressed with `pflag`/`cobra`. Every later CLI slice
+  depends on it. See `docs/SPEC.md` §4.1.
+- **PL-11** (byte-parity scope at verbosity ≥3) still needs a ruling.
+
+`v0.1.0` would publish a stub whose `--version` claims `(GNU Stow 2.4.1 compatible)`.
+release-please's standing release PR is deliberately left open until that is true.
