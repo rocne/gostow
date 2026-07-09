@@ -3,6 +3,7 @@ package conformance
 import (
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -76,4 +77,10 @@ func RequirePerl(t *testing.T) {
 	if _, err := exec.LookPath("perl"); err != nil {
 		t.Fatalf("perl not found, but the `oracle` build tag requires it: %v", err)
 	}
+}
+
+// MentionsFlag reports whether help names flag as a whole token, so "--no" is not
+// satisfied by "--no-folding" and "-d" is not satisfied by "-dir".
+func MentionsFlag(help, flag string) bool {
+	return regexp.MustCompile(regexp.QuoteMeta(flag) + `([^\w-]|$)`).MatchString(help)
 }

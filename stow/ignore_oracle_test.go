@@ -109,10 +109,10 @@ func TestIgnoreAgreesWithStowPm(t *testing.T) {
 				}
 			}
 			if fx.local != nil {
-				writeFile(t, filepath.Join(root, "stow/pkg/.stow-local-ignore"), *fx.local)
+				write(t, filepath.Join(root, "stow/pkg/.stow-local-ignore"), *fx.local)
 			}
 			if fx.global != nil {
-				writeFile(t, filepath.Join(root, "home/.stow-global-ignore"), *fx.global)
+				write(t, filepath.Join(root, "home/.stow-global-ignore"), *fx.global)
 			}
 			home := filepath.Join(root, "home")
 
@@ -169,11 +169,4 @@ func runIgnoreOracle(t *testing.T, perlLib, root, home string, paths []string) [
 		got[i] = f == "1"
 	}
 	return got
-}
-
-func writeFile(t *testing.T, path, content string) {
-	t.Helper()
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
 }

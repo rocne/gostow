@@ -43,7 +43,7 @@ func AssertSameAsOracle(t *testing.T, c Case) {
 		if c.Pre == nil {
 			continue
 		}
-		pre := RunBinary(oracle, c.Pre, c.environ(root), filepath.Join(root, c.Cwd))
+		pre := RunBinary(oracle, c.preArgv(root), c.environ(root), filepath.Join(root, c.Cwd))
 		if pre.ExitCode != 0 {
 			t.Fatalf("pre-stow in %s failed (%d): %s", root, pre.ExitCode, pre.Stderr)
 		}
@@ -111,9 +111,14 @@ func assertIsOwnHelp(t *testing.T, c Case, who, bin, root, stdout string) {
 	}
 }
 
+// preArgv returns Pre with the sandbox root substituted. It lives here, beside
+// its only caller, because Pre is meaningful only when there is an oracle to
+// build the starting state with.
+func (c Case) preArgv(root string) []string { return expandAll(c.Pre, root) }
+
 func runIn(t *testing.T, bin string, c Case, root string) Run {
 	t.Helper()
-	run := RunBinary(bin, c.Args, c.environ(root), filepath.Join(root, c.Cwd))
+	run := RunBinary(bin, c.argv(root), c.environ(root), filepath.Join(root, c.Cwd))
 	tree, err := Snapshot(root)
 	if err != nil {
 		t.Fatalf("snapshot %q: %v", root, err)

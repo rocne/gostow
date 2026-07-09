@@ -38,6 +38,40 @@ func TestCLIAgainstOracle(t *testing.T) {
 	args := func(rest ...string) []string { return append(append([]string{}, base...), rest...) }
 
 	cases := []Case{
+		// --- default directory resolution -----------------------------------
+		//
+		// Every other fixture passes "-d stow -t target", so until these existed
+		// the commonest invocation in the world -- `cd ~/dotfiles && stow vim` --
+		// was never compared against the oracle. The gap hid a real bug: the CLI
+		// carried its own copy of Stow::Util::parent, and on a single-segment
+		// absolute stow dir it returned "/" where Perl returns "", so
+		// `stow -d /tmp pkg` aimed the symlink farm at the filesystem root.
+		//
+		// `-d` defaults to the cwd; `-t` defaults to parent($stow_dir) || '.'.
+		{
+			Name: "no --dir and no --target: stow dir is the cwd, target its parent",
+			Stow: Tree{"pkg/f": F("x")},
+			Cwd:  "stow",
+			Args: []string{"-v", "pkg"},
+		},
+		{
+			Name: "no --target: derived from a relative --dir",
+			Stow: Tree{"pkg/f": F("x")},
+			Args: []string{"-v", "-d", "stow", "pkg"},
+		},
+		{
+			Name: "no --target: derived from an absolute --dir",
+			Stow: Tree{"pkg/f": F("x")},
+			Args: []string{"-v", "-d", SandboxToken + "/stow", "pkg"},
+		},
+		{
+			Name: "no --dir and no --target, unstowing again",
+			Stow: Tree{"pkg/f": F("x")},
+			Cwd:  "stow",
+			Pre:  []string{"-d", ".", "pkg"},
+			Args: []string{"-v", "-D", "pkg"},
+		},
+
 		// --- the operation log at each verbosity ---------------------------
 		{
 			Name: "stow one file, silent at verbosity 0",
