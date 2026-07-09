@@ -33,8 +33,30 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-  release:
+  # Last line of defence before artifacts ship. ci.yml's version-guard already
+  # fails the release PR if the manifest reaches 1.0.0, so by the time we get
+  # here the tag should always be v0.x. If it isn't, the tag and GitHub release
+  # already exist (release-please made them) — but nothing is built, signed, or
+  # published to Cloudsmith/Homebrew, which is the part that can't be taken back.
+  guard-pre-1-0:
     needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse to publish 1.0.0 or later
+        env:
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          case "$TAG" in
+            v0.*) echo "ok: $TAG is pre-1.0" ;;
+            *)
+              echo "::error::refusing to publish $TAG — gostow stays pre-1.0 until the stow engine is complete"
+              exit 1
+              ;;
+          esac
+
+  release:
+    needs: [release-please, guard-pre-1-0]
     if: needs.release-please.outputs.release_created == 'true'
     permissions:
       contents: write

@@ -7,6 +7,32 @@ on:
     branches: [main]
 
 jobs:
+  # gostow must stay pre-1.0 until the engine is complete: a v1 tag is a promise
+  # of GNU Stow parity we have not earned yet.
+  #
+  # release-please cannot reach 1.0.0 by itself — `bump-minor-pre-major: true`
+  # clamps even a breaking change to a minor bump while major == 0. But three
+  # things can still force it: a `Release-As: 1.0.0` commit footer (which
+  # short-circuits the versioning strategy entirely), flipping that config flag
+  # off, or hand-editing the manifest. All three surface as a manifest value, so
+  # this is where we catch them — on the release PR, before any tag exists.
+  version-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Refuse a 1.0.0-or-later version
+        run: |
+          v=$(jq -er '."."' .release-please-manifest.json)
+          echo "manifest version: $v"
+          case "$v" in
+            0.*) echo "ok: $v is pre-1.0" ;;
+            *)
+              echo "::error::refusing $v — gostow stays pre-1.0 until the stow engine is complete"
+              exit 1
+              ;;
+          esac
+
   test:
     runs-on: ubuntu-latest
     steps:

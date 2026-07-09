@@ -14,7 +14,26 @@ on:
       - "v*"
 
 jobs:
+  # The break-glass path bypasses release-please entirely, so it bypasses every
+  # versioning guard release-please provides. Re-assert the pre-1.0 rule here:
+  # `git push origin v1.0.0` must not publish.
+  guard-pre-1-0:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse to publish 1.0.0 or later
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          case "$TAG" in
+            v0.*) echo "ok: $TAG is pre-1.0" ;;
+            *)
+              echo "::error::refusing to publish $TAG — gostow stays pre-1.0 until the stow engine is complete"
+              exit 1
+              ;;
+          esac
+
   release:
+    needs: guard-pre-1-0
     permissions:
       contents: write
       issues: write
