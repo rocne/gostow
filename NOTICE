@@ -1,0 +1,42 @@
+gostow
+Copyright (c) 2026 Rocne Scribner
+Licensed under the MIT License. See LICENSE.
+
+------------------------------------------------------------------------------
+
+gostow is an independent reimplementation of GNU Stow, written in Go. It shares
+no source code with GNU Stow, which is written in Perl and licensed under the
+GNU General Public License, version 3 or later.
+
+    GNU Stow — https://www.gnu.org/software/stow/
+    Copyright (c) Bob Glickstein, Adam Spiers, and contributors.
+
+gostow reproduces GNU Stow's *behaviour*: its option names and their parsing,
+its exit codes, its diagnostic messages, and the symlink farm it builds. Those
+are facts about an interface, and reimplementing them is what this project is.
+
+Two pieces of GNU Stow's text are reproduced literally, because reproducing them
+is the behaviour:
+
+  * The built-in ignore list — the patterns in Stow.pm's __DATA__ section
+    (RCS, CVS, .git, backup files, and so on), copied into stow/ignore.go. A
+    file GNU Stow declines to stow must be a file gostow declines to stow; the
+    patterns *are* the specification. They are short, functional regular
+    expressions with no expressive latitude.
+
+  * Individual error and conflict messages, which scripts and users read, and
+    which must therefore match byte for byte.
+
+GNU Stow's --help text is NOT reproduced. gostow's help is written in gostow's
+own words, points at gostow's own issue tracker, and links GNU Stow's manual as
+the authority on what the shared options mean. See docs/SPEC.md §4.5.
+
+Where an option's meaning needs more than a line, GNU Stow's manual describes
+gostow exactly, and is the better document:
+
+    https://www.gnu.org/software/stow/manual/
+
+GNU Stow 2.4.1 is also gostow's test oracle: the differential suite builds the
+real Perl program from its released tarball and compares gostow against it. That
+build happens on a developer's or CI machine and is never redistributed as part
+of gostow. See test/install-stow-oracle.sh.

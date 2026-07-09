@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -27,8 +28,9 @@ func TestExtensionFlagsAreNotAbbreviatable(t *testing.T) {
 }
 
 // The extensions are listed in --help: a flag nobody can discover is a flag
-// nobody uses. Byte parity survives because the differential suite deletes the
-// lines naming them, which requires the shape asserted below.
+// nobody uses. Parity survives because help *prose* is not part of the contract
+// — option parsing is, and that is pinned by 6307 argv vectors against real
+// Getopt::Long. See SPEC §4.5.
 func TestExtensionFlagsAreVisibleInHelp(t *testing.T) {
 	root := fixture(t)
 	stdout, _, code := run(t, root, map[string]string{"HOME": filepath.Join(root, "home")}, "--help")
@@ -42,41 +44,56 @@ func TestExtensionFlagsAreVisibleInHelp(t *testing.T) {
 	}
 }
 
-// The invariant the differential suite depends on: deleting every line that
-// contains "--gostow-" must leave GNU Stow's help block untouched. So no
-// extension line may be blank, and none may be a continuation of another.
-// Breaking this would make the parity comparison silently wrong rather than red.
-func TestExtensionHelpLinesAreDeletableWithoutTrace(t *testing.T) {
+// Every option the parser accepts must be documented in --help.
+//
+// gostow's help is no longer a transcript of stow's, so nothing external keeps
+// the two in step: a new flag added to spec() and forgotten in usageText() would
+// simply be undiscoverable. This is that check, and it is exactly the check GNU
+// Stow lacks — `--no-folding` has been a real, working, undocumented flag there
+// for years (ledger PL-16). gostow documents it.
+func TestHelpDocumentsEveryOption(t *testing.T) {
+	root := fixture(t)
+	stdout, _, code := run(t, root, map[string]string{"HOME": filepath.Join(root, "home")}, "--help")
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0", code)
+	}
+
+	for _, opt := range spec() {
+		for _, name := range opt.Names {
+			flag := "-" + name
+			if len(name) > 1 {
+				flag = "--" + name
+			}
+			if !mentionsFlag(stdout, flag) {
+				t.Errorf("--help never names %s", flag)
+			}
+		}
+	}
+}
+
+// mentionsFlag looks for flag as a whole token, so "--no" is not found inside
+// "--no-folding" and "-d" is not found inside "-dir".
+func mentionsFlag(help, flag string) bool {
+	return regexp.MustCompile(regexp.QuoteMeta(flag) + `([^\w-]|$)`).MatchString(help)
+}
+
+// gostow must not send its own bug reports to somebody else's mailing list. The
+// copied help block used to end "Report bugs to: bug-stow@gnu.org", which is
+// GNU Stow's address, and it is the reason the prose was rewritten at all.
+func TestHelpPointsBugsAtGostow(t *testing.T) {
 	root := fixture(t)
 	stdout, _, _ := run(t, root, map[string]string{"HOME": filepath.Join(root, "home")}, "--help")
 
-	var kept []string
-	removed := 0
-	for _, line := range strings.Split(stdout, "\n") {
-		if strings.Contains(line, "--gostow-") {
-			if strings.TrimSpace(line) == "" {
-				t.Error("an extension line is blank; deleting it would eat a blank line stow prints")
-			}
-			removed++
-			continue
-		}
-		kept = append(kept, line)
+	if strings.Contains(stdout, "bug-stow@gnu.org") {
+		t.Error("--help still directs gostow's bug reports to the GNU Stow mailing list")
 	}
-	if removed != 2 {
-		t.Errorf("removed %d extension lines, want 2", removed)
+	if !strings.Contains(stdout, BugURL) {
+		t.Errorf("--help should name %s", BugURL)
 	}
-
-	stripped := strings.Join(kept, "\n")
-	if strings.Contains(stripped, "gostow-") {
-		t.Error("a continuation line survived: every extension line must name the flag")
-	}
-	// stow's block ends "-h, --help ...\n\nReport bugs to:". If an extension line
-	// had carried a blank, we would see three newlines here.
-	if strings.Contains(stripped, "\n\n\nReport bugs to:") {
-		t.Error("deleting the extension lines left a stray blank line")
-	}
-	if !strings.Contains(stripped, "-h, --help            Show this help\n\nReport bugs to:") {
-		t.Error("stripped help does not rejoin stow's block exactly")
+	// stow's manual is the authority on what the shared options mean; there is
+	// no second description to keep in sync, so the link must survive.
+	if !strings.Contains(stdout, StowManualURL) {
+		t.Errorf("--help should credit and link GNU Stow's manual at %s", StowManualURL)
 	}
 }
 

@@ -29,6 +29,14 @@ archives:
     ids: [gostow]
     name_template: "{{ .ProjectName }}_{{ .Tag }}_{{ .Os }}_{{ .Arch }}"
     formats: [tar.gz]
+    # Naming `files` replaces GoReleaser's defaults, which cover LICENSE and
+    # README but not NOTICE. NOTICE records what gostow reproduces from GNU Stow
+    # and under what reasoning; attribution that does not ship with the binary is
+    # not attribution.
+    files:
+      - LICENSE
+      - NOTICE
+      - README.md
 
 nfpms:
   - id: gostow

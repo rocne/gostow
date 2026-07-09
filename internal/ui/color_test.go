@@ -32,15 +32,15 @@ var painted = []struct {
 	{"All operations aborted.", true},
 	{"--- Skipping .vimrc as it already points to ../stow/vim/.vimrc", true},
 	{"gostow 0.1.0 (GNU Stow 2.4.1 compatible)", true},
-	{"SYNOPSIS:", true},
-	{"OPTIONS:", true},
+	{"USAGE:", true},
+	{"CHOOSING FILES:", true},
 	{"GOSTOW EXTENSIONS:", true},
-	{"    -d DIR, --dir=DIR     Set stow dir to DIR (default is current dir)", true},
+	{"    -d, --dir=DIR         Stow directory (default: $STOW_DIR)", true},
 	{"    --gostow-fix          Fix GNU Stow's known defects instead of matching them", true},
 
 	// Left alone.
 	{"", false},
-	{"Report bugs to: bug-stow@gnu.org", false},
+	{"Report gostow's bugs to: https://github.com/rocne/gostow/issues", false},
 	{"                          if the file is already stowed to another package", false},
 	{"                            -v or --verbose adds 1; --verbose=N sets level", false},
 	{"RMDIRECTORY: not an operation", false}, // \s|$ guard earns its keep

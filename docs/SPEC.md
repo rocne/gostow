@@ -299,9 +299,61 @@ drop-in case. The **identity line alone** ignores `$0` and says `gostow`, becaus
 the tool rather than the invocation.
 
 This is also what makes the differential harness strict: it builds gostow's binary *named
-`stow`*, so stderr and the synopsis compare byte-for-byte, and only the identity line is
-expected to differ. Note `Unknown option: foo` carries **no** program-name prefix at all —
+`stow`*, so stderr compares byte-for-byte, and only the identity line is expected to
+differ. Note `Unknown option: foo` carries **no** program-name prefix at all —
 Getopt::Long emits it directly.
+
+### 4.5 Help **prose** is not part of parity — a **ruled** exception
+
+gostow's `--help` was originally GNU Stow's block, transcribed byte for byte. It is now
+gostow's own prose. **Ruled 2026-07-09** on two independent grounds, either of which
+suffices.
+
+**Licensing.** GNU Stow is GPLv3-or-later; gostow is MIT. Option *names*, their semantics,
+their parsing and their observable behaviour are interface facts that anyone may
+reimplement — that is what the whole engine does, and it is not in question. But 34 lines
+of English prose (1644 bytes, measured) are stow's *expression*. Redistributing them under
+MIT offers rights we do not hold.
+
+**Correctness.** The transcribed block ended:
+
+```
+Report bugs to: bug-stow@gnu.org
+```
+
+so gostow directed *its own* bug reports to the GNU Stow mailing list. Faithfully
+reproducing that is not fidelity; it is a defect, and a discourteous one.
+
+#### What the mandate actually promises
+
+> every existing script, config, flag, and option behaves identically
+
+Help prose is not a script, a config, a flag, or an option. **Option parsing is**, and it
+remains byte-exact — pinned by 6307 argv vectors against real `Getopt::Long` (§4.1). No
+command line GNU Stow accepts is parsed differently by gostow, and no output a script reads
+has changed. The usage *diagnostic* on stderr and the exit code stay byte-exact too; only
+the help block dumped alongside them on stdout is gostow's.
+
+#### What is checked instead
+
+Four properties replace the byte comparison, and each is stronger, in the dimension that
+matters, than "the prose is identical":
+
+| Property | Where | Layer |
+|---|---|---|
+| Every option **GNU Stow documents**, gostow documents. | `TestHelpDocumentsEveryOptionStowDocuments` | differential |
+| Every option **gostow's parser accepts**, gostow documents. | `TestHelpDocumentsEveryOption` | hermetic |
+| A usage error prints exactly that binary's own `--help` on stdout. | `Case.UsageOnStdout` | differential |
+| `--help` names gostow's bug tracker, never stow's. | `TestHelpPointsBugsAtGostow` | hermetic |
+
+The converse of the first is deliberately **not** asserted: gostow's help may name *more*.
+It names its own `--gostow-*` extensions, and it names **`--no-folding`** — a real,
+working flag that stow's help has never mentioned (PL-16). The second property is exactly
+the check GNU Stow lacks.
+
+Freed from transcription, the block is grouped, wrapped, and points at GNU Stow's manual as
+the authority on what the shared options mean. There is no second description to keep in
+sync.
 
 ---
 
@@ -551,20 +603,20 @@ still exits 1. **[probed]**
 gostow adds nothing to stow's option namespace. Anything gostow invents is prefixed
 `--gostow-`, and three rules keep the parity mandate intact:
 
-1. **Listed in `--help`**, because a flag nobody can discover is a flag nobody uses. This is
-   an *additive* liberty, the second after colour. Every extension line contains the literal
-   `--gostow-` and none adds a blank line, so **deleting those lines yields stow's block byte
-   for byte** — and the differential suite does exactly that (`StripExtensionLines`) before
-   demanding equality on everything else. The property is enforced, not promised.
-   `--gostow-help` prints the long form.
+1. **Listed in `--help`**, because a flag nobody can discover is a flag nobody uses.
+   No filtering is needed to keep that safe: help prose is not part of parity (§4.5), and
+   what *is* checked — that gostow documents every option stow documents — is unharmed by
+   gostow documenting more. `--gostow-help` prints the long form.
 2. **Never abbreviated.** Extension options are `NoAbbrev` in `internal/getopt`, so they are
    absent from prefix matching *and* from ambiguity lists. `--g` therefore remains
    `Unknown option: g`, exactly as in real stow. Without this, adding an extension would
    silently redefine an abbreviation and change how existing argv parses.
 3. **Forbidden in a parity fixture's argv.** `AssertSameAsOracle` fails loudly on a fixture
-   whose argv contains `--gostow-`. Filtering the *output* of `--help` is sound because both
-   binaries ran the same command; filtering an *argument* would compare gostow-with-the-flag
-   against an oracle that never saw it, and the suite would quietly stop testing parity.
+   whose argv contains `--gostow-`. Relaxing what is compared about *output* can be sound —
+   both binaries still ran the same command, and §4.5 replaces the help comparison with
+   sharper properties. Filtering an *argument* never is: it would compare
+   gostow-with-the-flag against an oracle that never saw it, and the suite would quietly
+   stop testing parity.
 
 The consequence, and the reason the convention is safe: **for any command line that does not
 literally contain `--gostow-`, gostow behaves exactly as GNU Stow** — the sole exception being
@@ -594,12 +646,14 @@ User-facing prose lives in `docs/DIVERGENCES.md`.
 ### 8.4 Colour (the sole additive liberty)
 
 Colour is emitted **only** when the relevant stream is a TTY, and never changes byte content
-on a pipe. `NO_COLOR` is respected. Because `--help` output is itself part of the contract,
-the colourised help is a TTY-only *rendering* of the exact same text — not a re-layout.
+on a pipe. `NO_COLOR` is respected. Colourised help is a TTY-only *rendering* of the exact
+same text — never a re-layout. That constraint outlives the reason it was written down:
+help prose is no longer byte-pinned to stow (§4.5), but colour must still be strippable
+back to the plain bytes, because that is what makes it safe on every other stream.
 
-This means **cobra's help/usage templates are not applicable**: gostow's help text is a
-fixed block dictated by parity, not a generated one. The copied plumbing from dot-dagger
-reduces to the palette and TTY-detection glue.
+**cobra's help/usage templates remain inapplicable**: gostow's help is a hand-written
+block, not a generated one. The copied plumbing from dot-dagger reduces to the palette and
+TTY-detection glue.
 
 **Implemented (2026-07-09) in `internal/ui`.** Two structural choices turn the paragraph
 above from a promise into a property of the code:
@@ -680,7 +734,7 @@ table is a deliverable in its own right.
 | PL-13 | Documented known bug: the **empty-directory problem** (unstowing `quux` removes `target/bar` even though `foo/bar` needs it). | stow man page | 3 | **Replicate in v1.** Being better than stow is a different project. |
 | PL-14 | Documented known bug: tree-folding symlinks pointing into a *different* stow directory fail to split open. | stow man page | 3 | **Replicate in v1.** |
 | PL-15 | Perl regex vs RE2: `$` in Perl matches before a trailing newline; Go's `$` matches end-of-text only. Filenames may legally contain `\n`. | source analysis | 3 | Ledger. Decide during ignore-matcher implementation. |
-| PL-16 | `--no-folding` is a real flag but is **absent from `--help`** (present in the man page). | probed | 1 | **Replicate** the help text verbatim, omission included. |
+| PL-16 | `--no-folding` is a real flag but is **absent from `--help`** (present in the man page). | probed | 1 | **RULED (2026-07-09): fix it.** Originally *replicate the omission*, because the help block was transcribed byte for byte. §4.5 removed that transcription — help prose is not part of parity, on both licensing and correctness grounds — so nothing is owed to an omission. gostow documents `--no-folding`. A hermetic test derives the expected flag list from the parser's own option table, so no future flag can be added and left undocumented; that is the check whose absence produced this entry upstream. |
 | PL-19 | `Value "abc" invalid for option verbose (...)` is emitted by **`Getopt::Long`, not by stow**, and its wording changed in Getopt::Long 2.55: 2.54 (Ubuntu 24.04, perl 5.38) says `(number expected)`, 2.58 (perl 5.40) says `(integer number expected)`. The byte is therefore a function of the installed Perl, not of the pinned stow 2.4.1. | **probed (2026-07-09)**, on two Perls | 2 | **Cannot replicate — the referent is undefined.** "stow 2.4.1's behaviour" does not determine this string. gostow pins the **current upstream wording** (`integer number expected`), which is what Getopt::Long has said since 2.55 and will keep saying. The differential suite folds the two spellings together, and *only* those two. |
 | PL-18 | `Stow.pm` interpolates `$ENV{HOME}` into a regex unescaped (`$msg =~ s!$ENV{HOME}(/|$)!~$1!g`, `Stow.pm:409` and `:759`), to abbreviate the home directory in a trace message. A `$HOME` containing a regex metacharacter therefore **kills stow before it does any work** — at *every* verbosity, because the substitution runs before the `debug()` guard. `HOME=/tmp/ho(me stow pkg` → `Unmatched ( in regex ... at Stow.pm line 409.`, exit 2, nothing stowed. | **probed (2026-07-09)** | 2 | **Do not replicate.** A crash, and undefined for any user whose home path contains `(`, `[`, `+`, `*`, `?`, `\` … gostow never builds that regex: the message it decorates exists only at verbosity ≥3, where PL-11 owes semantic equivalence, not bytes. **Report upstream** — this is the most serious defect the audit found. |
 | PL-17 | stow's program name is `basename($0)`, not a constant: symlink stow to `mystow` and the usage errors, the `--help` synopsis and the version banner all say `mystow`. | probed | 1 | **Replicate the mechanism.** gostow derives the program name from `os.Args[0]` exactly as stow does, so `stow: ERROR: ...` and the synopsis line are byte-exact when gostow is installed under the name `stow` — which is how it is used as a drop-in. The **identity line alone** is fixed to `gostow`, per PL-12: it names the tool, not the invocation. This is what lets the differential harness compare stderr byte-for-byte (it runs gostow's binary named `stow`). |

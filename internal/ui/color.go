@@ -95,10 +95,12 @@ var rules = []rule{
 	// separates the running commentary from the operations that matter.
 	{regexp.MustCompile(`^(--- )`), []style{sgr(dim)}},
 
-	// The help block. It is a fixed, byte-exact string dictated by parity, so
-	// these rules colour it in place and may never re-lay it out.
+	// The help block. Colour tints it in place and may never re-lay it out: the
+	// round-trip test asserts that stripping the escapes returns it unchanged.
 	{regexp.MustCompile(`^(gostow \S+ \(GNU Stow \S+ compatible\))$`), []style{sgr(bold)}},
-	{regexp.MustCompile(`^(SYNOPSIS:|OPTIONS:|GOSTOW EXTENSIONS:)$`), []style{sgr(bold)}},
+	// A section heading is a line of capitals ending in a colon. Anchoring to
+	// the whole line keeps "Report gostow's bugs to: ..." out of it.
+	{regexp.MustCompile(`^([A-Z][A-Z ]*:)$`), []style{sgr(bold)}},
 	// gostow's own flags are magenta, so a reader can see at a glance which
 	// lines are not GNU Stow's. This rule precedes the general option rule
 	// because "--gostow-fix" also matches that one.

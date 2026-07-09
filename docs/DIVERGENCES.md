@@ -28,8 +28,18 @@ There are also two cosmetic differences that are not bugs being fixed:
 
 - **`gostow --version` reports gostow's version**, naming the stow release it clones:
   `gostow 0.1.0 (GNU Stow 2.4.1 compatible)`. Reporting `2.4.1` for a binary released
-  as `0.1.0` would be theatre. The same line opens `--help`; every other byte of the
-  help block is stow's, verbatim.
+  as `0.1.0` would be theatre.
+
+- **`gostow --help` is written in gostow's own words.** It documents the same options,
+  with the same names and the same meanings, and it also documents `--no-folding` —
+  a real, working flag that stow's own help has never mentioned. The old help block was
+  stow's, copied byte for byte, which had two problems: stow is GPLv3 and gostow is MIT,
+  and the copied text ended `Report bugs to: bug-stow@gnu.org`, so gostow was sending its
+  own bug reports to somebody else's mailing list.
+
+  Nothing a script reads changed. Option *parsing* is still byte-exact, the usage
+  diagnostic on stderr is still byte-exact, and so is the exit code. The test suite checks
+  that every option GNU Stow documents, gostow documents too.
 
 - **gostow colours its output when it is talking to a terminal.** Real stow never does.
   Nothing else in this document is additive; this is, because it cannot reach a script.
@@ -86,9 +96,9 @@ gostow adds no flags to stow's namespace. Anything gostow invents is prefixed
 `--gostow-`, and three rules keep that from denting parity:
 
 1. **They are listed in `--help`,** because a flag nobody can find is a flag nobody uses.
-   Those lines are additive — nothing stow prints is changed — and each one names the flag,
-   so the parity suite deletes them and then demands the rest match stow byte for byte.
-   `--gostow-help` prints the long explanation.
+   That is safe because help text is not part of the promise — what the suite checks is
+   that gostow documents every option GNU Stow documents, and listing *more* cannot break
+   that. `--gostow-help` prints the long explanation.
 2. **It cannot be abbreviated.** `--gostow-fix` answers only to its exact spelling, so
    `--g` remains `Unknown option: g`, exactly as in real stow. Adding an extension can
    never change how an existing argv parses.
