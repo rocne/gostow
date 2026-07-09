@@ -272,6 +272,14 @@ with byte parity:
 gostow 0.1.0 (GNU Stow 2.4.1 compatible)
 ```
 
+**No leading `v`.** The release pipeline injects release-please's `tag_name` into
+`main.version`, so the binary is handed `"v0.1.0"`; `IdentityLine` strips the tag's `v`.
+`v0.1.0` shipped without that strip, announcing itself as `gostow v0.1.0` while this
+section, `docs/DIVERGENCES.md` and the tests all said otherwise — because every test fed
+the CLI a hand-written `"0.1.0"`, a value the pipeline never produces. A test that only
+sees inputs the pipeline cannot emit says nothing about the pipeline. `version_test.go` is
+now written from the pipeline's side.
+
 **Rationale.** Parity is owed to the *behaviour scripts depend on* — the symlink farm, the
 conflict semantics, the exit codes, the operation log. It is not owed to the tool's
 self-identification. When you run a tool and ask its version, you want *that tool's*
