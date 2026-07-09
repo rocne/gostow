@@ -128,20 +128,25 @@ And: **a conformance test that skips is a vacuous pass.** `OraclePath`, `Require
 `OraclePerlLib` all `t.Fatal`. Never soften one to `t.Skip` — with no oracle installed the
 old `t.Skip` made the whole differential suite print `ok` in 0.26s instead of 5.8s.
 
-## Versioning — gostow stays pre-1.0
+## Versioning — the pre-1.0 guards are gone
 
-**A `v1` tag is a promise of stow parity we have not earned.** Until the engine is
-complete, every release is `v0.x`. Four layers enforce this; don't weaken any of
-them without a deliberate decision:
+gostow stayed pre-1.0 while the engine was incomplete, enforced by four independent
+guards. **The engine is complete and differentially validated, so those guards have been
+removed** — the decision they were protecting has now been made deliberately, which is
+exactly what they existed to force.
 
-- `initial-version: 0.1.0` in `release-please-config.json`. Without it release-please
-  proposes **1.0.0** on a first release — `bump-minor-pre-major` does not prevent this,
-  because the initial-release path never bumps anything.
-- `guard-release-pr` in `release-please.yml`. `ci.yml`'s `version-guard` **cannot** see
-  release-please's own PR: GitHub never triggers `pull_request` workflows for
-  `GITHUB_TOKEN`-authored PRs.
-- `version-guard` in `ci.yml`, for human PRs touching the manifest.
-- `guard-pre-1-0` in both release workflows — the hard stop before anything is published.
+For the record, because the mechanism is worth remembering: `bump-minor-pre-major` alone
+does **not** keep a project pre-1.0. With no prior release, release-please takes the
+*initial-release* path and returns `initial-version`, which defaults to 1.0.0; the bump
+clamp is never consulted, because nothing is being bumped. The four guards were
+`initial-version` in the config, `version-guard` in `ci.yml` (human PRs touching the
+manifest), `guard-release-pr` in `release-please.yml` (because `GITHUB_TOKEN`-authored
+PRs never trigger `pull_request` workflows, so `ci.yml` cannot see the release PR), and
+`guard-pre-1-0` in both release workflows as the hard stop before publication.
+
+**Semver applies from here.** `stow.Task`, `stow.Options`, `Apply` and the rest of the
+engine's exported surface are now a compatibility promise (SPEC §3.3 records the review
+that preceded the freeze). A breaking change to them needs a `v2`.
 
 ## Commit and Push Cadence
 
@@ -209,13 +214,15 @@ the one substantial piece of copied *prose* — the `--help` block — was rewri
 gostow's own words (SPEC §4.5). The ignore patterns and the error messages stay verbatim
 because they *are* the behaviour, and `NOTICE` records that.
 
-Still owed before v1:
-
-- Upstream bug reports: PL-01, PL-03, PL-04, PL-05, PL-06, PL-08, PL-09, PL-10, PL-18.
+Nothing blocks v1. Still owed as a courtesy, not as a release gate: the upstream bug
+reports (PL-01, PL-03, PL-04, PL-05, PL-06, PL-08, PL-09, PL-10, and worst of them PL-18,
+where a `$HOME` containing a regex metacharacter makes real stow unusable).
 
 `chkstow` is ruled **out of scope for v1** (SPEC §12). `--compat` and the PL-04
 protection asymmetry are both pinned by differential fixtures. `ignore.t` is settled without
 porting it: `Stow.pm`'s own `ignore()` is the oracle.
 
-**Do not tag v1 without a human decision.** The four pre-1.0 guards stay standing until
-then; release-please's standing PR (#2) is deliberately left open.
+**The v1 decision has been taken deliberately, by a human.** The four pre-1.0 guards are
+removed. Merging this change does not publish anything: it makes release-please regenerate
+its standing PR (#2) as `chore(main): release 1.0.0`, and merging **that** is what tags and
+ships v1.0.0.

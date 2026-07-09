@@ -102,8 +102,12 @@ is a contract or a bug, and what gostow does about it. Nine of them are bugs owe
 
 ## Status
 
-Pre-1.0, deliberately. A `v1` tag is a promise of parity that is evidenced but not proved:
-a fixture nobody wrote is a behaviour nobody checked. See `docs/TEST-PLAN.md`.
+The engine is complete and the exported API is stable under semver.
+
+Parity is *evidenced*, not proved — a fixture nobody wrote is a behaviour nobody checked.
+What the evidence covers is written down: `docs/SPEC.md` §10 rules on every stow quirk
+found, `docs/TEST-PLAN.md` describes the layers, and the differential suite runs the real
+binary on every change.
 
 ## Licence
 
