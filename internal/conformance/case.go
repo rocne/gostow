@@ -39,6 +39,13 @@ type Case struct {
 	// the tree are still compared byte-for-byte; only the status is exempt, and
 	// gostow is required to exit 2.
 	FatalExitDiverges bool
+
+	// UsageOnStdout marks a case where the whole help block lands on stdout —
+	// every usage error does this. gostow's help is written in gostow's own words
+	// (SPEC §4.5), so the two blocks differ by design. stderr, the exit code and
+	// the tree are still compared byte-for-byte; stdout is instead required to be
+	// exactly what that same binary prints for --help.
+	UsageOnStdout bool
 }
 
 // Materialize lays out the sandbox: a stow/ dir, a target/ dir, a home/ dir, and

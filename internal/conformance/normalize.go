@@ -25,8 +25,7 @@ func Normalize(s string, root string) string {
 // "<prog> (GNU Stow) version 2.4.1" versus gostow's
 // "gostow <ver> (GNU Stow 2.4.1 compatible)". Ledger PL-12 rules that divergence.
 // It opens both --version and the --help block, so a byte-for-byte comparison of
-// either has to fold it away first — and nothing else. Everything below the
-// banner, including the synopsis, is byte-exact.
+// either has to fold it away first — and nothing else.
 var reIdentity = regexp.MustCompile(`(?m)^(?:gostow \S+ \(GNU Stow \d+\.\d+\.\d+ compatible\)|\S+ \(GNU Stow\) version \d+\.\d+\.\d+)$`)
 
 // NormalizeIdentity replaces the identity banner with a stable token.
@@ -34,30 +33,13 @@ func NormalizeIdentity(s string) string {
 	return reIdentity.ReplaceAllString(s, "<IDENTITY>")
 }
 
-// StripExtensionLines removes every line naming a gostow extension.
+// There was once a StripExtensionLines here, deleting gostow's "--gostow-" lines
+// from --help so the rest could be compared to stow's block byte for byte. It is
+// gone with the transcript it served: gostow's help is now its own prose (SPEC
+// §4.5), so there is no block to rejoin. What replaced it is not a looser check
+// but a different one — Case.UsageOnStdout requires each binary's usage error to
+// print exactly that binary's own --help, and the oracle suite requires every
+// option stow documents to be documented by gostow too.
 //
-// gostow's --help lists its own flags, which GNU Stow obviously does not. Every
-// extension line contains the literal "--gostow-" and none of them adds a blank
-// line, so deleting them leaves stow's block byte for byte. That is what makes
-// the additive help text *checkable* rather than merely asserted: the
-// differential suite strips these lines and then demands byte equality on
-// everything else — the synopsis, the wording, the spacing, the trailing
-// addresses.
-//
-// It is applied to both sides. Real stow's output never contains the token, so
-// stripping is a no-op there and the comparison stays honest.
-//
-// This is not a licence to normalise anything else. A fixture whose *argv* names
-// an extension is refused outright by AssertSameAsOracle: gostow's extended
-// behaviour is never compared against an oracle that never saw the flag.
-func StripExtensionLines(s string) string {
-	lines := strings.Split(s, "\n")
-	kept := lines[:0]
-	for _, line := range lines {
-		if strings.Contains(line, "--gostow-") {
-			continue
-		}
-		kept = append(kept, line)
-	}
-	return strings.Join(kept, "\n")
-}
+// The argv guard in AssertSameAsOracle stays. Filtering *output* was defensible;
+// filtering an *argument* would compare two different commands.

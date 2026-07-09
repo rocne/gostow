@@ -52,10 +52,10 @@ func AssertSameAsOracle(t *testing.T, c Case) {
 	oRun := runIn(t, oracle, c, oracleRoot)
 	gRun := runIn(t, gostow, c, gostowRoot)
 
-	// Two normalisations, both tied to a ruled divergence and nothing else: the
-	// identity banner (PL-12) and the extension lines gostow adds to --help.
+	// One normalisation, tied to one ruled divergence: the identity banner
+	// (PL-12). Nothing else about the streams is touched.
 	clean := func(s, root string) string {
-		return StripExtensionLines(NormalizeIdentity(Normalize(s, root)))
+		return NormalizeIdentity(Normalize(s, root))
 	}
 	oRun.Stdout = clean(oRun.Stdout, oracleRoot)
 	oRun.Stderr = clean(oRun.Stderr, oracleRoot)
@@ -64,7 +64,19 @@ func AssertSameAsOracle(t *testing.T, c Case) {
 	gRun.Stderr = clean(gRun.Stderr, gostowRoot)
 	gRun.Tree = Normalize(gRun.Tree, gostowRoot)
 
-	if oRun.Stdout != gRun.Stdout {
+	switch {
+	case c.UsageOnStdout:
+		// stow dumps its whole help block on a usage error. The *diagnostic* is
+		// the contract — it goes to stderr and is compared byte for byte below —
+		// while the help block is prose, and gostow's prose is its own (SPEC §4.5).
+		//
+		// So the claim is not "the two agree", which would be false, but the
+		// stronger and still-checkable "each prints exactly the help it prints for
+		// --help". A fixture that silently stopped printing usage would fail here
+		// rather than pass by comparing nothing.
+		assertIsOwnHelp(t, c, "oracle", oracle, oracleRoot, oRun.Stdout)
+		assertIsOwnHelp(t, c, "gostow", gostow, gostowRoot, gRun.Stdout)
+	case oRun.Stdout != gRun.Stdout:
 		t.Errorf("stdout mismatch for %q\noracle:\n%s\ngostow:\n%s", c.Name, oRun.Stdout, gRun.Stdout)
 	}
 	if oRun.Stderr != gRun.Stderr {
@@ -80,6 +92,22 @@ func AssertSameAsOracle(t *testing.T, c Case) {
 	}
 	if oRun.Tree != gRun.Tree {
 		t.Errorf("tree mismatch for %q\noracle:\n%s\ngostow:\n%s", c.Name, oRun.Tree, gRun.Tree)
+	}
+}
+
+// assertIsOwnHelp requires that stdout is exactly what `bin --help` prints, and
+// that it is not empty.
+func assertIsOwnHelp(t *testing.T, c Case, who, bin, root, stdout string) {
+	t.Helper()
+
+	help := RunBinary(bin, []string{"--help"}, c.environ(root), filepath.Join(root, c.Cwd))
+	want := NormalizeIdentity(Normalize(help.Stdout, root))
+	if strings.TrimSpace(want) == "" {
+		t.Fatalf("%q: %s --help printed nothing; the check below would be vacuous", c.Name, who)
+	}
+	if stdout != want {
+		t.Errorf("%q: %s printed a usage error whose stdout is not its own --help\ngot:\n%s\nwant:\n%s",
+			c.Name, who, stdout, want)
 	}
 }
 

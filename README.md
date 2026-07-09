@@ -8,6 +8,9 @@ Same flags, same output, same exit codes, same symlinks. Your existing scripts a
 suite runs the real `stow` binary alongside gostow and compares stdout, stderr, exit status
 and the resulting directory tree.
 
+(Two things are deliberately gostow's own: it colours a terminal, and `--help` is written
+in gostow's words. Neither reaches a script. See [what's different](#whats-different).)
+
 ```console
 $ gostow --dotfiles -t ~ vim
 $ gostow -D vim            # unstow
@@ -42,6 +45,9 @@ and `gostow --gostow-help` summarises it at the terminal. In brief:
   `.stow-local-ignore` exists but cannot be read. gostow does none of these.
 - **gostow colours its output on a terminal**, and only on a terminal. Pipe it, redirect it,
   or set `NO_COLOR`, and every byte is stow's. *Byte-compatible on a pipe, prettier on a TTY.*
+- **`gostow --help` is gostow's own prose**, and documents `--no-folding` — a real, working
+  flag that stow's help has never mentioned. Option *parsing*, the usage diagnostic on
+  stderr, and exit codes are all still byte-exact.
 - **`--gostow-fix`** turns off the remaining bug-compatibility — stow's `.stowrc` having no
   comment syntax, `stow -- pkg` silently discarding `pkg`, `RMDIR` printing without a colon,
   and a real `--dotfiles` protection bypass. Everything gostow adds is prefixed `--gostow-`
@@ -101,4 +107,13 @@ a fixture nobody wrote is a behaviour nobody checked. See `docs/TEST-PLAN.md`.
 
 ## Licence
 
-gostow reproduces GNU Stow's interface and its help text. See `LICENSE`.
+gostow is **MIT** licensed. See `LICENSE`.
+
+It is an independent reimplementation and shares no source code with GNU Stow, which is
+GPLv3-or-later. It does reproduce GNU Stow's *behaviour* — option names, parsing, exit
+codes, diagnostic messages, and the built-in ignore patterns — because that is what a
+drop-in replacement is. `NOTICE` records exactly what is reproduced and why.
+
+gostow's `--help` is written in gostow's own words. GNU Stow's
+[manual](https://www.gnu.org/software/stow/manual/) is the authority on what the shared
+options mean, and it describes gostow exactly.

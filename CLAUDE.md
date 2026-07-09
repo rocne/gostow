@@ -24,6 +24,12 @@ things gostow does not replicate are stow's bugs and accidental/unexpected behav
 - **The one additive liberty:** color on a TTY (real stow emits none; coloring a
   TTY cannot affect any script or pipe). Slogan: *byte-compatible on a pipe,
   prettier on a TTY.*
+- **Help *prose* is not part of parity** (SPEC §4.5). The mandate covers scripts,
+  configs, flags and options — option *parsing* stays byte-exact, and so does the
+  usage diagnostic on stderr. But `--help`'s wording is gostow's own: stow is
+  GPLv3 and gostow is MIT, and the copied block told users to mail their gostow
+  bugs to `bug-stow@gnu.org`. Ignore patterns and error messages *are* behaviour
+  and stay verbatim; see `NOTICE`.
 - **Pin a target stow version** as the conformance referent (a modern, recent,
   stable release, e.g. the 2.4.x line — confirm exact latest stable). The spec IS
   stow's behavior at that version.
@@ -176,10 +182,13 @@ every platform GoReleaser ships is exercised on both axes. All three pass. The o
 stays linux-only: it builds GNU Stow from source, and the referent is the Perl program's
 behaviour, not the platform's.
 
+The **licence question is settled.** gostow stays MIT. It shares no source with GNU Stow;
+the one substantial piece of copied *prose* — the `--help` block — was rewritten in
+gostow's own words (SPEC §4.5). The ignore patterns and the error messages stay verbatim
+because they *are* the behaviour, and `NOTICE` records that.
+
 Still owed before v1:
 
-- **Licence question.** gostow is MIT and reproduces GNU Stow's (GPLv3) help text and
-  built-in ignore list verbatim. Needs a human decision before publishing v1.
 - Upstream bug reports: PL-01, PL-03, PL-04, PL-05, PL-06, PL-08, PL-09, PL-10, PL-18.
 
 `chkstow` is ruled **out of scope for v1** (SPEC §12). `--compat` and the PL-04

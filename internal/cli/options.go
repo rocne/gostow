@@ -29,12 +29,12 @@ func spec() []getopt.Option {
 		{Names: []string{"S", "stow"}},
 		{Names: []string{"R", "restow"}},
 
-		// gostow's own extensions. Three rules keep them from denting parity:
-		// they are prefixed "gostow-", they are NoAbbrev (so adding them cannot
-		// make "--g" resolve to anything real stow would have rejected), and they
-		// are absent from --help, whose bytes are part of the contract.
-		// docs/DIVERGENCES.md is where they are documented; --gostow-help prints
-		// them. The parity suite forbids any fixture from using them.
+		// gostow's own extensions. Two rules keep them from denting parity: they
+		// are prefixed "gostow-", and they are NoAbbrev — so adding them cannot
+		// make "--g" resolve to anything real stow would have rejected. They are
+		// listed in --help, because a flag nobody can discover is a flag nobody
+		// uses; --gostow-help prints the long form, and docs/DIVERGENCES.md is
+		// the full account. The parity suite forbids any fixture from using them.
 		{Names: []string{"gostow-fix"}, NoAbbrev: true},
 		{Names: []string{"gostow-help"}, NoAbbrev: true},
 	}

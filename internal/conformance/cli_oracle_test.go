@@ -2,7 +2,30 @@
 
 package conformance
 
-import "testing"
+import (
+	"testing"
+
+	// Imported for the dependency edge, not for anything it exports.
+	//
+	// These tests drive gostow by building a binary at run time and execing it,
+	// so nothing here would otherwise reference the code under test. `go test`
+	// caches a package's result against its import graph: with no edge to
+	// internal/cli, editing cli.go leaves the graph unchanged and Go replays the
+	// previous PASS without running anything. A differential suite that reports
+	// success without executing is the purest form of the vacuous pass this
+	// project keeps finding — caught by mutating cli.go's usage path and watching
+	// six fixtures stay green.
+	//
+	// internal/cli transitively pulls in internal/getopt, internal/ui and stow:
+	// everything cmd/gostow is made of but its three-line main().
+	//
+	// It belongs in a _test.go file, not in gostow.go. Package stow's own oracle
+	// tests import this package, and internal/cli imports stow — a non-test import
+	// here would be an import cycle. A package's test files are not compiled into
+	// it when another package imports it, so this edge exists only where it is
+	// needed.
+	_ "github.com/rocne/gostow/internal/cli"
+)
 
 // The full-binary differential suite (seam S2): the same argv, the same fixture,
 // real stow 2.4.1 on one copy and gostow on the other, comparing stdout bytes,
@@ -74,22 +97,32 @@ func TestCLIAgainstOracle(t *testing.T) {
 		},
 
 		// --- usage errors: message on stderr, usage on stdout, exit 1 -------
-		{Name: "no packages", Stow: Tree{"pkg/f": F("x")}, Args: base},
-		{Name: "unknown option", Stow: Tree{"pkg/f": F("x")}, Args: args("--bogus", "pkg")},
-		{Name: "ambiguous abbreviation", Stow: Tree{"pkg/f": F("x")}, Args: args("--ver", "pkg")},
-		{Name: "bad --dir", Args: []string{"-d", "nosuchdir", "-t", "target", "pkg"}},
-		{Name: "bad --target", Args: []string{"-d", "stow", "-t", "nosuchdir", "pkg"}},
+		//
+		// The diagnostic and the exit code are the contract and are compared byte
+		// for byte. The help block dumped on stdout is prose, and gostow's prose is
+		// its own; UsageOnStdout requires each binary to print exactly its own
+		// --help there. See SPEC §4.5.
+		{Name: "no packages", Stow: Tree{"pkg/f": F("x")}, Args: base, UsageOnStdout: true},
+		{Name: "unknown option", Stow: Tree{"pkg/f": F("x")}, Args: args("--bogus", "pkg"), UsageOnStdout: true},
+		{Name: "ambiguous abbreviation", Stow: Tree{"pkg/f": F("x")}, Args: args("--ver", "pkg"), UsageOnStdout: true},
+		{Name: "bad --dir", Args: []string{"-d", "nosuchdir", "-t", "target", "pkg"}, UsageOnStdout: true},
+		{Name: "bad --target", Args: []string{"-d", "stow", "-t", "nosuchdir", "pkg"}, UsageOnStdout: true},
 		{
-			Name: "-- discards the packages after it",
-			Stow: Tree{"pkg/f": F("x")},
-			Args: args("--", "pkg"),
+			Name:          "-- discards the packages after it",
+			Stow:          Tree{"pkg/f": F("x")},
+			Args:          args("--", "pkg"),
+			UsageOnStdout: true,
 		},
 
-		// --- help and version (identity line normalised away) ---------------
-		{Name: "--help", Args: []string{"--help"}},
-		{Name: "-h", Args: []string{"-h"}},
+		// --- help and version -----------------------------------------------
+		//
+		// --help itself is not a byte fixture: the blocks differ by design. What
+		// is checked instead lives in TestHelpDocumentsEveryOptionStowDocuments
+		// below (the interface) and in package cli (the prose). --version stays a
+		// byte fixture: after the identity line is normalised it must be empty,
+		// which pins the stream and the exit code.
 		{Name: "--version", Args: []string{"--version"}},
-		{Name: "help beats version", Args: []string{"-V", "-h"}},
+		{Name: "help beats version", Args: []string{"-V", "-h"}, UsageOnStdout: true},
 
 		// --- option semantics reaching the engine ---------------------------
 		{
