@@ -19,6 +19,9 @@ const (
 	ActionRestow
 )
 
+// String names the action for diagnostics and %v. It is deliberately not the
+// source of any user-facing wording: the CLI owns the words it prints, so this
+// can be renamed without moving a byte of gostow's parity-pinned output.
 func (a Action) String() string {
 	switch a {
 	case ActionUnstow:
