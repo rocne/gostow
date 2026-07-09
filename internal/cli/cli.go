@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/rocne/gostow/internal/ui"
 	"github.com/rocne/gostow/stow"
 )
 
@@ -42,7 +43,17 @@ func Run(args []string, version string, stdout, stderr io.Writer) int {
 	if len(args) > 0 {
 		prog = filepath.Base(args[0])
 	}
-	a := &app{prog: prog, version: version, stdout: stdout, stderr: stderr}
+
+	// Colour, gostow's one addition to stow's output, is applied here and only
+	// here: both streams are wrapped once, so the engine's operation log (which
+	// is handed a.stderr as its Log) is painted without package stow knowing
+	// that terminals exist. Off a TTY these are byte pass-throughs. SPEC §8.4.
+	out := ui.NewWriter(stdout, ui.Enabled(stdout))
+	errOut := ui.NewWriter(stderr, ui.Enabled(stderr))
+	defer func() { _ = out.Flush() }()
+	defer func() { _ = errOut.Flush() }()
+
+	a := &app{prog: prog, version: version, stdout: out, stderr: errOut}
 
 	code, err := a.run(args[1:])
 	if err != nil {

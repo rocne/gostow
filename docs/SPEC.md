@@ -571,6 +571,32 @@ This means **cobra's help/usage templates are not applicable**: gostow's help te
 fixed block dictated by parity, not a generated one. The copied plumbing from dot-dagger
 reduces to the palette and TTY-detection glue.
 
+**Implemented (2026-07-09) in `internal/ui`.** Two structural choices turn the paragraph
+above from a promise into a property of the code:
+
+1. Colour is a **rendering pass over finished lines**, not coloured format strings at the
+   call sites. A rule may only wrap an existing substring in an SGR escape, and the painted
+   line is reassembled from the original bytes. `StripANSI(paint(s)) == s` is therefore an
+   executable claim, asserted over every line shape gostow emits — paired with a test that
+   each shape *is* painted, so the round trip cannot pass vacuously.
+2. When colour is off, **the rendering pass does not run at all**: `ui.Writer.Write` hands
+   the slice straight to the underlying stream. Code that never executes cannot perturb a
+   pipe.
+
+Both streams are wrapped once, in `cli.Run`. The engine writes plain text to `Options.Log`
+and knows nothing about terminals, so `package stow` stays free of presentation — the same
+line `bin/stow` and `Stow.pm` draw. Colour is disabled for a non-`*os.File`, a non-character
+device, `NO_COLOR` (any non-empty value, per no-color.org) and `TERM=dumb`.
+
+The differential harness captures the binary's output through pipes, so it observes
+uncoloured bytes without having to ask; `TestNoColourOffATTY` pins that, and fails if any
+call site ever writes an escape directly instead of going through `internal/ui`.
+
+Palette: `LINK:` green, `UNLINK:` red, `MKDIR:`/`RMDIR` blue, `MV:` cyan, `ERROR:` bold red,
+`WARNING!` bold yellow, conflict bullets red, the `--- ` trace prefix dim, help headings and
+the identity line bold, option flags cyan, and gostow's own `--gostow-` flags magenta so a
+reader can see at a glance which lines are not GNU Stow's.
+
 ---
 
 ## 9. Exit codes
