@@ -36,3 +36,6 @@ go.work.sum
 
 # Built binary (go build ./... emits it at the repo root)
 /gostow
+
+# Pinned GNU Stow conformance oracle (test/install-stow-oracle.sh)
+/.oracle/
