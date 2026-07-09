@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/rocne/gostow/internal/conformance"
 )
 
 // stow's t/ignore.t is 287 assertions, by far the densest file in its suite, and
@@ -78,7 +80,12 @@ var ignorePaths = []string{
 }
 
 func TestIgnoreAgreesWithStowPm(t *testing.T) {
-	perlLib := findPerlLib(t)
+	// OraclePath is the single place that decides whether an oracle exists (and
+	// asserts it is 2.4.1). Stow.pm ships beside that binary, so if the binary is
+	// there and the module is not, the installation is broken and this must fail
+	// loudly rather than skip -- a conformance test that silently skips is a
+	// vacuous pass.
+	perlLib := findPerlLib(t, conformance.OraclePath(t))
 
 	for _, fx := range ignoreFixtures() {
 		t.Run(fx.name, func(t *testing.T) {
@@ -151,32 +158,23 @@ func runIgnoreOracle(t *testing.T, perlLib, root, home string, paths []string) [
 	return got
 }
 
-// findPerlLib locates the oracle's Stow.pm. It lives beside the pinned binary,
-// under a Perl-version-specific directory, so it is searched for rather than
-// assumed.
-func findPerlLib(t *testing.T) string {
+// findPerlLib locates the Stow.pm that ships with the pinned binary at oracleBin.
+// The module sits under <prefix>/share/perl5, sometimes below a Perl-version
+// directory, so it is searched for rather than assumed.
+func findPerlLib(t *testing.T, oracleBin string) string {
 	t.Helper()
 
-	repo, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	roots := []string{filepath.Join(filepath.Dir(repo), ".oracle", "share", "perl5")}
-	if p, err := exec.LookPath("stow"); err == nil {
-		roots = append(roots, filepath.Join(filepath.Dir(filepath.Dir(p)), "share", "perl5"))
-	}
+	prefix := filepath.Dir(filepath.Dir(oracleBin)) // <prefix>/bin/stow -> <prefix>
+	base := filepath.Join(prefix, "share", "perl5")
 
-	for _, base := range roots {
-		matches, _ := filepath.Glob(filepath.Join(base, "Stow.pm"))
-		if len(matches) > 0 {
-			return base
-		}
-		versioned, _ := filepath.Glob(filepath.Join(base, "*", "Stow.pm"))
-		if len(versioned) > 0 {
-			return filepath.Dir(versioned[0])
-		}
+	if _, err := os.Stat(filepath.Join(base, "Stow.pm")); err == nil {
+		return base
 	}
-	t.Skip("Stow.pm not found; the oracle build tag implies a pinned stow installation")
+	versioned, _ := filepath.Glob(filepath.Join(base, "*", "Stow.pm"))
+	if len(versioned) > 0 {
+		return filepath.Dir(versioned[0])
+	}
+	t.Fatalf("Stow.pm not found under %s, though the oracle binary %s exists", base, oracleBin)
 	return ""
 }
 
