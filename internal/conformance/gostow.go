@@ -12,6 +12,7 @@ import (
 var (
 	gostowOnce sync.Once
 	gostowBin  string
+	gostowDir  string
 	gostowErr  error
 )
 
@@ -32,7 +33,7 @@ func GostowPath(t *testing.T) string {
 			gostowErr = err
 			return
 		}
-		t.Cleanup(func() { _ = os.RemoveAll(dir) })
+		gostowDir = dir
 
 		bin := filepath.Join(dir, "stow")
 		cmd := exec.Command("go", "build", "-o", bin, "./cmd/gostow")
@@ -47,6 +48,16 @@ func GostowPath(t *testing.T) string {
 		t.Fatalf("%v", gostowErr)
 	}
 	return gostowBin
+}
+
+// CleanupGostowBuild removes the shared build directory. It must be called from
+// TestMain, never from a t.Cleanup: the binary is built once and shared by every
+// test in the package, so tying its lifetime to whichever test happened to ask
+// for it first would delete it out from under all the others.
+func CleanupGostowBuild() {
+	if gostowDir != "" {
+		_ = os.RemoveAll(gostowDir)
+	}
 }
 
 // repoRoot walks up from the working directory to the go.mod at the module root.

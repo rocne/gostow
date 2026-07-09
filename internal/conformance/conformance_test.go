@@ -1,10 +1,19 @@
 package conformance
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// The gostow binary is built once for the whole package, so its lifetime is the
+// test binary's, not any individual test's.
+func TestMain(m *testing.M) {
+	code := m.Run()
+	CleanupGostowBuild()
+	os.Exit(code)
+}
 
 func TestSnapshotDeterministicAndVerbatimLinks(t *testing.T) {
 	tree := Tree{

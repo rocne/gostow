@@ -502,8 +502,17 @@ cannot stow directory <src> over existing non-directory target <path>
 source is an absolute symlink <path> => <dest>
 ```
 
-Fatal errors: `stow: ERROR: <message>` on stderr.
-Usage errors: `stow: <message>` on stderr, **then the full usage block on stdout**.
+Fatal errors come in **two shapes**, and the difference is visible:
+
+- `Stow::Util::error()` → `stow: ERROR: <message>` on stderr. **[probed]**
+- a bare `die()` (only reachable from `.stowrc` handling) → `<message>` on stderr, with **no
+  program-name prefix at all**. **[probed]**
+
+Both are pinned to exit 2 in gostow (PL-07); both message forms are replicated verbatim.
+
+Usage errors: `stow: <message>` on stderr followed by a **blank line**, then the full usage
+block on **stdout**. A parse failure calls `usage('')`: the empty message prints nothing, but
+still exits 1. **[probed]**
 
 ### 8.4 Colour (the sole additive liberty)
 
@@ -569,9 +578,10 @@ table is a deliverable in its own right.
 | PL-14 | Documented known bug: tree-folding symlinks pointing into a *different* stow directory fail to split open. | stow man page | 3 | **Replicate in v1.** |
 | PL-15 | Perl regex vs RE2: `$` in Perl matches before a trailing newline; Go's `$` matches end-of-text only. Filenames may legally contain `\n`. | source analysis | 3 | Ledger. Decide during ignore-matcher implementation. |
 | PL-16 | `--no-folding` is a real flag but is **absent from `--help`** (present in the man page). | probed | 1 | **Replicate** the help text verbatim, omission included. |
+| PL-18 | `Stow.pm` interpolates `$ENV{HOME}` into a regex unescaped (`$msg =~ s!$ENV{HOME}(/|$)!~$1!g`, `Stow.pm:409` and `:759`), to abbreviate the home directory in a trace message. A `$HOME` containing a regex metacharacter therefore **kills stow before it does any work** — at *every* verbosity, because the substitution runs before the `debug()` guard. `HOME=/tmp/ho(me stow pkg` → `Unmatched ( in regex ... at Stow.pm line 409.`, exit 2, nothing stowed. | **probed (2026-07-09)** | 2 | **Do not replicate.** A crash, and undefined for any user whose home path contains `(`, `[`, `+`, `*`, `?`, `\` … gostow never builds that regex: the message it decorates exists only at verbosity ≥3, where PL-11 owes semantic equivalence, not bytes. **Report upstream** — this is the most serious defect the audit found. |
 | PL-17 | stow's program name is `basename($0)`, not a constant: symlink stow to `mystow` and the usage errors, the `--help` synopsis and the version banner all say `mystow`. | probed | 1 | **Replicate the mechanism.** gostow derives the program name from `os.Args[0]` exactly as stow does, so `stow: ERROR: ...` and the synopsis line are byte-exact when gostow is installed under the name `stow` — which is how it is used as a drop-in. The **identity line alone** is fixed to `gostow`, per PL-12: it names the tool, not the invocation. This is what lets the differential harness compare stderr byte-for-byte (it runs gostow's binary named `stow`). |
 
-**Upstream bug reports to file:** PL-01, PL-03, PL-04, PL-05, PL-06, PL-08, PL-09, PL-10.
+**Upstream bug reports to file:** PL-01, PL-03, PL-04, PL-05, PL-06, PL-08, PL-09, PL-10, **PL-18** (highest severity: a `$HOME` containing a regex metacharacter makes stow unusable).
 
 ---
 
@@ -655,6 +665,10 @@ All ledger items are now ruled. What remains:
   deferred to the ignore-matcher implementation, as planned.
 
 ### Settled (2026-07-09)
+
+- **PL-18** probed and ruled: `$HOME` is interpolated into a regex unescaped, so a home
+  directory containing a regex metacharacter crashes real stow at any verbosity. Not
+  replicated.
 
 - Go module path is `github.com/rocne/gostow`; the engine is `package stow` at `stow/`.
 - **PL-06** probed unreachable; **PL-09** and **PL-10** probed and confirmed as genuine bugs,

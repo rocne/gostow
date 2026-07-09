@@ -28,6 +28,12 @@ type Case struct {
 	// concatenates their tokens; see ledger PL-01.
 	HomeRc string
 	Cwd    string
+
+	// FatalExitDiverges marks a case where stow's fatal exit status is
+	// errno-derived and therefore undefined (ledger PL-07). stdout, stderr and
+	// the tree are still compared byte-for-byte; only the status is exempt, and
+	// gostow is required to exit 2.
+	FatalExitDiverges bool
 }
 
 // Materialize lays out the sandbox: a stow/ dir, a target/ dir, a home/ dir, and

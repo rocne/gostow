@@ -2,6 +2,7 @@ package conformance
 
 import (
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -18,4 +19,17 @@ func Normalize(s string, root string) string {
 		s = strings.ReplaceAll(s, resolved, "$SANDBOX")
 	}
 	return s
+}
+
+// reIdentity matches the one line gostow deliberately does not reproduce: stow's
+// "<prog> (GNU Stow) version 2.4.1" versus gostow's
+// "gostow <ver> (GNU Stow 2.4.1 compatible)". Ledger PL-12 rules that divergence.
+// It opens both --version and the --help block, so a byte-for-byte comparison of
+// either has to fold it away first — and nothing else. Everything below the
+// banner, including the synopsis, is byte-exact.
+var reIdentity = regexp.MustCompile(`(?m)^(?:gostow \S+ \(GNU Stow \d+\.\d+\.\d+ compatible\)|\S+ \(GNU Stow\) version \d+\.\d+\.\d+)$`)
+
+// NormalizeIdentity replaces the identity banner with a stable token.
+func NormalizeIdentity(s string) string {
+	return reIdentity.ReplaceAllString(s, "<IDENTITY>")
 }

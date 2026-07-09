@@ -30,11 +30,11 @@ func AssertSameAsOracle(t *testing.T, c Case) {
 	oRun := runIn(t, oracle, c, oracleRoot)
 	gRun := runIn(t, gostow, c, gostowRoot)
 
-	oRun.Stdout = Normalize(oRun.Stdout, oracleRoot)
-	oRun.Stderr = Normalize(oRun.Stderr, oracleRoot)
+	oRun.Stdout = NormalizeIdentity(Normalize(oRun.Stdout, oracleRoot))
+	oRun.Stderr = NormalizeIdentity(Normalize(oRun.Stderr, oracleRoot))
 	oRun.Tree = Normalize(oRun.Tree, oracleRoot)
-	gRun.Stdout = Normalize(gRun.Stdout, gostowRoot)
-	gRun.Stderr = Normalize(gRun.Stderr, gostowRoot)
+	gRun.Stdout = NormalizeIdentity(Normalize(gRun.Stdout, gostowRoot))
+	gRun.Stderr = NormalizeIdentity(Normalize(gRun.Stderr, gostowRoot))
 	gRun.Tree = Normalize(gRun.Tree, gostowRoot)
 
 	if oRun.Stdout != gRun.Stdout {
@@ -43,7 +43,12 @@ func AssertSameAsOracle(t *testing.T, c Case) {
 	if oRun.Stderr != gRun.Stderr {
 		t.Errorf("stderr mismatch for %q\noracle:\n%s\ngostow:\n%s", c.Name, oRun.Stderr, gRun.Stderr)
 	}
-	if oRun.ExitCode != gRun.ExitCode {
+	switch {
+	case c.FatalExitDiverges:
+		if gRun.ExitCode != 2 {
+			t.Errorf("%q: gostow exit = %d, want 2 (fatal errors are pinned; ledger PL-07)", c.Name, gRun.ExitCode)
+		}
+	case oRun.ExitCode != gRun.ExitCode:
 		t.Errorf("exit code mismatch for %q: oracle=%d gostow=%d", c.Name, oRun.ExitCode, gRun.ExitCode)
 	}
 	if oRun.Tree != gRun.Tree {
