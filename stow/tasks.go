@@ -30,9 +30,20 @@ type Task struct {
 	Action TaskAction
 	Type   TaskType
 	Path   string
-	// Source is the link destination for a link, or the move destination for
-	// a move. It is empty for a directory.
+
+	// Source is what a symlink points at — the destination recorded in the link
+	// itself. Links only; empty otherwise. (stow's own name for it: a link's
+	// "source" is its target, which reads backwards but is the vocabulary the
+	// engine and its documentation share.)
 	Source string
+
+	// Dest is where a file moves to, under --adopt. Moves only; empty otherwise.
+	//
+	// Source and Dest are separate because they are separate in Stow.pm, whose
+	// task comment reads "source => (only for links); dest => (only for moving
+	// files)". Folding them into one field made a move's *destination* live in a
+	// field called Source, which is not a shortcut but an error.
+	Dest string
 
 	// skip marks a task cancelled by a later, opposing task. stow leaves the
 	// cancelled task in the list and filters it just before execution, which is
@@ -290,7 +301,7 @@ func (e *engine) doRmdir(dir string) {
 
 func (e *engine) doMv(src, dst string) {
 	e.logOp(opMv, noteNone, fmt.Sprintf("%s -> %s", src, dst))
-	e.plan.tasks = append(e.plan.tasks, &Task{Action: TaskMove, Type: TypeFile, Path: src, Source: dst})
+	e.plan.tasks = append(e.plan.tasks, &Task{Action: TaskMove, Type: TypeFile, Path: src, Dest: dst})
 }
 
 // processTasks executes the surviving tasks in plan order.
@@ -334,8 +345,8 @@ func (e *engine) processTask(t *Task) error {
 			return fatalf("Could not remove link: %s (%v)", t.Path, err)
 		}
 	case t.Action == TaskMove && t.Type == TypeFile:
-		if err := os.Rename(e.real(t.Path), e.real(t.Source)); err != nil {
-			return fatalf("Could not move %s -> %s (%v)", t.Path, t.Source, err)
+		if err := os.Rename(e.real(t.Path), e.real(t.Dest)); err != nil {
+			return fatalf("Could not move %s -> %s (%v)", t.Path, t.Dest, err)
 		}
 	default:
 		return fatalf("bad task action")

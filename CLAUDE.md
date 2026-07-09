@@ -166,11 +166,13 @@ Colour (SPEC §8.4) is implemented as a **rendering pass over finished lines** i
 `StripANSI(paint(s)) == s` over every line shape, and — when colour is off — the pass does
 not run at all. The engine never learns that terminals exist.
 
+The **public API review is done** (SPEC §3.3). `Task.Source` was split into `Source` (a
+link's destination) and `Dest` (a move's destination), matching `Stow.pm`'s own field
+comments; the conflict banner's gerund moved out of `Action.String()` and into the CLI,
+so an enum's spelling is no longer load-bearing for parity-pinned bytes.
+
 Still owed before v1:
 
-- **Public API review.** `Task.Source` is overloaded (link destination vs move destination)
-  and `Action.String()` leaks message formatting into a domain type. Cheap now, expensive
-  after a v1 tag freezes the surface.
 - **darwin and arm64 ship untested.** GoReleaser builds them; CI is Ubuntu-only.
 - **Licence question.** gostow is MIT and reproduces GNU Stow's (GPLv3) help text and
   built-in ignore list verbatim. Needs a human decision before publishing v1.

@@ -108,6 +108,7 @@ type Options struct {
     Defer     []string
     Override  []string
     Log       io.Writer // nil => io.Discard. The CLI passes os.Stderr.
+    FixQuirks bool      // fix stow's defects instead of matching them; see §8.36
 }
 
 // Apply is the deep entry point. It plans every request, detects all conflicts
@@ -129,7 +130,8 @@ type Task struct {
     Action TaskAction // Create, Remove, Move
     Type   TaskType   // Link, Dir, File
     Path   string     // relative to Target
-    Source string     // link destination (Link) or move destination (Move)
+    Source string     // what a symlink points at; links only
+    Dest   string     // where a file moves to (--adopt); moves only
 }
 
 type Conflict struct {
@@ -164,6 +166,34 @@ type ConflictError struct{ Conflicts []Conflict }
 `findStowedPath` are unit-tested directly. stow's own suite tests exactly these
 (`join_paths.t`, `parent.t`, `ignore.t`, `find_stowed_path.t`,
 `link_dest_within_stow_dir.t`), which is strong evidence they are the right internal seams.
+
+### 3.3 API review before the v1 freeze (2026-07-09)
+
+A `v1` tag freezes every exported name. Two defects were found and fixed; two suspicions
+were examined and deliberately left alone.
+
+**Fixed — `Task.Source` was two fields wearing one name.** It held a symlink's destination
+for a link *and* a file's move destination for a move, so a move's **destination** lived in
+a field called `Source`. That is not a shortcut, it is an error, and `Stow.pm` does not make
+it: its task comment reads `source => (only for links)` / `dest => (only for moving files)`.
+Split into `Source` and `Dest`, matching stow's own vocabulary. The `--adopt` differential
+fixture covers the move path — swapping `os.Rename`'s arguments fails `TestEngineAgainstOracle`.
+
+**Fixed — the conflict banner was built out of an enum's `String()`.** The CLI printed
+`"WARNING! %sing %s ..."` from `Action.String()`, which made `"stow"` a load-bearing
+*spelling* of `ActionStow`: renaming the Stringer would silently move parity-pinned bytes.
+The gerund now lives in `internal/cli`, where the words gostow prints belong, and
+`Action.String()` documents that it is for diagnostics only.
+
+**Left alone — `Task.Action` and `Conflict.Action` are different types sharing a name.**
+One is create/remove/move, the other stow/unstow/restow. `Stow.pm` calls both `action`, Go's
+type system makes confusing them a compile error, and renaming would trade stow's vocabulary
+for a problem the compiler already solves.
+
+**Left alone — `Conflict.Message` is a preformatted string.** A structured conflict would
+serve dstow better, but the message text is dictated by parity and the engine is the only
+thing that knows enough to produce it. Revisit when dstow has a concrete need; adding a
+structured field later is backwards-compatible, changing `Message`'s meaning is not.
 
 ---
 
