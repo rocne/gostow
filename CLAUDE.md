@@ -171,9 +171,13 @@ link's destination) and `Dest` (a move's destination), matching `Stow.pm`'s own 
 comments; the conflict banner's gerund moved out of `Action.String()` and into the CLI,
 so an enum's spelling is no longer load-bearing for parity-pinned bytes.
 
+CI runs the hermetic suite on `ubuntu-latest`, `ubuntu-24.04-arm` and `macos-latest`, so
+every platform GoReleaser ships is exercised on both axes. All three pass. The oracle suite
+stays linux-only: it builds GNU Stow from source, and the referent is the Perl program's
+behaviour, not the platform's.
+
 Still owed before v1:
 
-- **darwin and arm64 ship untested.** GoReleaser builds them; CI is Ubuntu-only.
 - **Licence question.** gostow is MIT and reproduces GNU Stow's (GPLv3) help text and
   built-in ignore list verbatim. Needs a human decision before publishing v1.
 - Upstream bug reports: PL-01, PL-03, PL-04, PL-05, PL-06, PL-08, PL-09, PL-10, PL-18.
