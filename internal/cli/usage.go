@@ -17,14 +17,20 @@ func IdentityLine(version string) string {
 	return fmt.Sprintf("gostow %s (GNU Stow %s compatible)", version, StowVersion)
 }
 
-// usageText is stow's --help block, byte-exact below the identity line: the
-// synopsis, the option list, its wording and its spacing. That includes the
-// omission of --no-folding, which is a real flag documented only in the man page
-// (ledger PL-16), and the upstream bug-report address, which belongs to the text
-// being reproduced.
+// usageText is stow's --help block, plus gostow's own extensions.
 //
-// prog follows basename($0) exactly as stow's $ProgramName does (ledger PL-17),
-// so this block is byte-identical when gostow is installed under the name stow.
+// Everything stow prints is reproduced verbatim: the synopsis, the option list,
+// its wording and its spacing, the omission of --no-folding (a real flag
+// documented only in the man page, ledger PL-16), and the upstream bug-report
+// address, which belongs to the text being reproduced. prog follows basename($0)
+// exactly as stow's $ProgramName does (ledger PL-17).
+//
+// The extension lines are additive, and shaped so that parity is mechanically
+// checkable: **every one of them contains the literal "--gostow-", and none of
+// them adds a blank line.** Delete the lines containing "--gostow-" and what
+// remains is stow's block, byte for byte. That is exactly what the differential
+// suite does before comparing (conformance.StripExtensionLines), so the property
+// is enforced rather than promised. Do not add an extension line that breaks it.
 func usageText(prog, version string) string {
 	return IdentityLine(version) + "\n" + fmt.Sprintf(`
 SYNOPSIS:
@@ -56,6 +62,8 @@ OPTIONS:
                             -v or --verbose adds 1; --verbose=N sets level)
     -V, --version         Show stow version number
     -h, --help            Show this help
+    --gostow-fix          Fix GNU Stow's known defects instead of matching them
+    --gostow-help         Explain gostow's extensions and divergences
 
 Report bugs to: bug-stow@gnu.org
 Stow home page: <http://www.gnu.org/software/stow/>
@@ -63,17 +71,18 @@ General help using GNU software: <http://www.gnu.org/gethelp/>
 `, prog)
 }
 
-// extensionHelp documents gostow's own flags, which cannot appear in --help
-// because that block's bytes are part of the parity contract (§8.4). Every such
-// flag is prefixed "gostow-" and answers only to its exact name, never to an
-// abbreviation — so no argv that real stow accepts is parsed differently here.
+// extensionHelp is the long form of what --help lists in two lines.
+//
+// Every gostow flag is prefixed "gostow-" and answers only to its exact name,
+// never to an abbreviation — so no argv that real stow accepts is parsed
+// differently here. See SPEC §8.35.
 func extensionHelp(version string) string {
 	return IdentityLine(version) + `
 
 GOSTOW EXTENSIONS:
 
-These flags do not exist in GNU Stow. They are hidden from --help, which is
-reproduced byte-for-byte, and they cannot be abbreviated.
+These flags do not exist in GNU Stow. They cannot be abbreviated, so no command
+line that GNU Stow accepts is parsed differently by gostow.
 
     --gostow-fix          Fix GNU Stow's known defects instead of reproducing
                           them. See docs/DIVERGENCES.md for the exact list.

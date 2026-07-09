@@ -52,11 +52,16 @@ func AssertSameAsOracle(t *testing.T, c Case) {
 	oRun := runIn(t, oracle, c, oracleRoot)
 	gRun := runIn(t, gostow, c, gostowRoot)
 
-	oRun.Stdout = NormalizeIdentity(Normalize(oRun.Stdout, oracleRoot))
-	oRun.Stderr = NormalizeIdentity(Normalize(oRun.Stderr, oracleRoot))
+	// Two normalisations, both tied to a ruled divergence and nothing else: the
+	// identity banner (PL-12) and the extension lines gostow adds to --help.
+	clean := func(s, root string) string {
+		return StripExtensionLines(NormalizeIdentity(Normalize(s, root)))
+	}
+	oRun.Stdout = clean(oRun.Stdout, oracleRoot)
+	oRun.Stderr = clean(oRun.Stderr, oracleRoot)
 	oRun.Tree = Normalize(oRun.Tree, oracleRoot)
-	gRun.Stdout = NormalizeIdentity(Normalize(gRun.Stdout, gostowRoot))
-	gRun.Stderr = NormalizeIdentity(Normalize(gRun.Stderr, gostowRoot))
+	gRun.Stdout = clean(gRun.Stdout, gostowRoot)
+	gRun.Stderr = clean(gRun.Stderr, gostowRoot)
 	gRun.Tree = Normalize(gRun.Tree, gostowRoot)
 
 	if oRun.Stdout != gRun.Stdout {

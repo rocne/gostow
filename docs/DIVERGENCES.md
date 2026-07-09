@@ -74,13 +74,17 @@ Two more differences are outside stow's control, and outside gostow's:
 gostow adds no flags to stow's namespace. Anything gostow invents is prefixed
 `--gostow-`, and three rules keep that from denting parity:
 
-1. **It is hidden from `--help`,** whose bytes are part of the contract. Run
-   `--gostow-help` to see the extensions.
+1. **They are listed in `--help`,** because a flag nobody can find is a flag nobody uses.
+   Those lines are additive — nothing stow prints is changed — and each one names the flag,
+   so the parity suite deletes them and then demands the rest match stow byte for byte.
+   `--gostow-help` prints the long explanation.
 2. **It cannot be abbreviated.** `--gostow-fix` answers only to its exact spelling, so
    `--g` remains `Unknown option: g`, exactly as in real stow. Adding an extension can
    never change how an existing argv parses.
-3. **The parity test suite refuses to run a fixture that uses one.** Not filters —
-   refuses, loudly. A parity test must be argv real stow could have been given.
+3. **The parity suite refuses a fixture whose *command line* uses one.** Filtering two
+   lines out of `--help` is fine — both binaries ran the same command. Filtering out a
+   *flag* would compare gostow-with-the-fix against a stow that never saw it, and the
+   suite would stop testing anything.
 
 The consequence: for any command line that does not literally contain `--gostow-`,
 gostow is GNU Stow.

@@ -254,7 +254,8 @@ The same identity line opens the `--help` banner. Everything else in the help bl
 synopsis, the option list, its wording and spacing — remains byte-exact (§8.4), including
 the omission of `--no-folding` (PL-16).
 
-This is the **only** intentional divergence in output. Ledger PL-12.
+Beyond the identity line, `--help` gains two additive lines naming gostow's own flags
+(§8.35). Nothing stow prints is altered, reordered or removed.
 
 ### 4.4.1 Program name is `basename($0)` — replicate the mechanism
 
@@ -520,16 +521,24 @@ still exits 1. **[probed]**
 gostow adds nothing to stow's option namespace. Anything gostow invents is prefixed
 `--gostow-`, and three rules keep the parity mandate intact:
 
-1. **Hidden from `--help`**, whose bytes are a contract (§4.4). `--gostow-help` prints them.
+1. **Listed in `--help`**, because a flag nobody can discover is a flag nobody uses. This is
+   an *additive* liberty, the second after colour. Every extension line contains the literal
+   `--gostow-` and none adds a blank line, so **deleting those lines yields stow's block byte
+   for byte** — and the differential suite does exactly that (`StripExtensionLines`) before
+   demanding equality on everything else. The property is enforced, not promised.
+   `--gostow-help` prints the long form.
 2. **Never abbreviated.** Extension options are `NoAbbrev` in `internal/getopt`, so they are
    absent from prefix matching *and* from ambiguity lists. `--g` therefore remains
    `Unknown option: g`, exactly as in real stow. Without this, adding an extension would
    silently redefine an abbreviation and change how existing argv parses.
-3. **Forbidden in the parity suite.** `AssertSameAsOracle` fails loudly on a fixture whose
-   argv contains `--gostow-`; a parity fixture must be argv real stow could have been given.
+3. **Forbidden in a parity fixture's argv.** `AssertSameAsOracle` fails loudly on a fixture
+   whose argv contains `--gostow-`. Filtering the *output* of `--help` is sound because both
+   binaries ran the same command; filtering an *argument* would compare gostow-with-the-flag
+   against an oracle that never saw it, and the suite would quietly stop testing parity.
 
 The consequence, and the reason the convention is safe: **for any command line that does not
-literally contain `--gostow-`, gostow is GNU Stow.**
+literally contain `--gostow-`, gostow behaves exactly as GNU Stow** — the sole exception being
+the two extension lines `--help` prints, which are additive and mechanically strippable.
 
 The only extension today is `--gostow-fix`, the CLI face of `stow.Options.FixQuirks`.
 
