@@ -16,14 +16,41 @@ STOW_SHA256="${STOW_SHA256:-2a671e75fc207303bfe86a9a7223169c7669df0a8108ebdf1a7f
 PREFIX="${PREFIX:-/usr/local}"
 
 TARBALL="stow-${STOW_VERSION}.tar.gz"
-URL="https://ftp.gnu.org/gnu/stow/${TARBALL}"
+
+# Mirrors, tried in order. ftp.gnu.org is the canonical home and is also a single
+# point of failure: it went unreachable mid-CI on 2026-07-10 and took the whole
+# conformance job with it, 134 seconds after the connect began.
+#
+# Falling back is safe *because* the tarball is checksum-pinned below. A mirror
+# cannot substitute content without failing sha256sum, so the trust root is the
+# hash in this file, not the host that served the bytes. ftpmirror.gnu.org is
+# GNU's own redirector to a nearby mirror; the third is a long-standing one.
+MIRRORS=(
+    "https://ftp.gnu.org/gnu/stow/${TARBALL}"
+    "https://ftpmirror.gnu.org/stow/${TARBALL}"
+    "https://mirrors.kernel.org/gnu/stow/${TARBALL}"
+)
 
 workdir="$(mktemp -d)"
 trap 'rm -rf "$workdir"' EXIT
 cd "$workdir"
 
-echo "==> fetching ${URL}"
-curl -fsSL -o "$TARBALL" "$URL"
+fetched=""
+for url in "${MIRRORS[@]}"; do
+    echo "==> fetching ${url}"
+    # --connect-timeout so an unreachable host fails in seconds, not minutes;
+    # --location because ftpmirror.gnu.org answers with a redirect.
+    if curl -fsSL --location --connect-timeout 20 --max-time 300 -o "$TARBALL" "$url"; then
+        fetched="$url"
+        break
+    fi
+    echo "    unreachable; trying the next mirror"
+done
+
+if [ -z "$fetched" ]; then
+    echo "error: could not fetch ${TARBALL} from any of ${#MIRRORS[@]} mirrors" >&2
+    exit 1
+fi
 
 echo "==> verifying sha256"
 echo "${STOW_SHA256}  ${TARBALL}" | sha256sum -c -
