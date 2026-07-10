@@ -79,7 +79,9 @@ than these docs quietly going stale.
 ### Any linux or macOS — tarball
 
 ```console
-$ VER=v0.1.0 OS=linux ARCH=amd64        # OS: linux|darwin   ARCH: amd64|arm64
+$ VER=$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
+        https://github.com/rocne/gostow/releases/latest | sed 's|.*/||')
+$ OS=linux ARCH=amd64                   # OS: linux|darwin   ARCH: amd64|arm64
 $ base=https://github.com/rocne/gostow/releases/download/$VER
 
 $ curl -fsSLO $base/gostow_${VER}_${OS}_${ARCH}.tar.gz
@@ -89,6 +91,10 @@ $ sha256sum -c --ignore-missing gostow_${VER}_checksums.txt
 $ tar xzf gostow_${VER}_${OS}_${ARCH}.tar.gz
 $ sudo install -m755 gostow /usr/local/bin/gostow
 ```
+
+`/releases/latest` redirects to the newest tag, so `VER` is read off the redirect rather
+than pinned here — a version written into a README is a version that is wrong after the
+next release. Set `VER=v0.1.1` by hand if you want a specific one.
 
 ### With the Go toolchain
 
@@ -109,7 +115,7 @@ Every archive carries a [sigstore](https://www.sigstore.dev/) build provenance a
 and `checksums.txt` is signed with a keyless cosign signature (`.sig` + `.pem`).
 
 ```console
-$ gh attestation verify gostow_v0.1.0_linux_amd64.tar.gz \
+$ gh attestation verify gostow_${VER}_${OS}_${ARCH}.tar.gz \
     --repo rocne/gostow --signer-repo rocne/release-ci
 ```
 
@@ -127,8 +133,11 @@ usage errors and its `--help` synopsis say `stow`. Point the name at it:
 ```console
 $ sudo ln -sf "$(command -v gostow)" /usr/local/bin/stow
 $ stow --version
-gostow 0.1.0 (GNU Stow 2.4.1 compatible)
+gostow 0.1.1 (GNU Stow 2.4.1 compatible)
 ```
+
+The version is gostow's own; `2.4.1` names the stow release it clones. Only the identity
+line diverges — see [docs/DIVERGENCES.md](docs/DIVERGENCES.md).
 
 If GNU Stow is also installed, make sure `/usr/local/bin` precedes `/usr/bin` on your
 `PATH`, or the Perl one wins.
