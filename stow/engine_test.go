@@ -353,18 +353,6 @@ func TestActionString(t *testing.T) {
 	}
 }
 
-// mkfile writes a file, creating parents. Fixtures below are small enough that a
-// tree literal would obscure more than it saves.
-func mkfile(t *testing.T, path, content string) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
 // doMv, isRealDir and Restow all read 0% in a hermetic coverage run, and the
 // reason is not that nothing exercises them: the differential and golden layers
 // drive gostow as a *subprocess*, and `go test -coverprofile` cannot see a
@@ -374,8 +362,8 @@ func mkfile(t *testing.T, path, content string) {
 // task, and a move is the only operation here that destroys information.
 func TestAdoptMovesAConflictingFileIntoThePackage(t *testing.T) {
 	dir, target := t.TempDir(), t.TempDir()
-	mkfile(t, filepath.Join(dir, "pkg", "f"), "package version")
-	mkfile(t, filepath.Join(target, "f"), "target version")
+	write(t, filepath.Join(dir, "pkg", "f"), "package version")
+	write(t, filepath.Join(target, "f"), "target version")
 
 	if _, err := Stow(Options{Dir: dir, Target: target, Fold: true, Adopt: true}, "pkg"); err != nil {
 		t.Fatalf("Stow --adopt: %v", err)
@@ -412,7 +400,7 @@ func TestAdoptMovesAConflictingFileIntoThePackage(t *testing.T) {
 // when folding is off and the walk must descend rather than link.
 func TestNoFoldingCreatesDirectoriesRatherThanFoldingThem(t *testing.T) {
 	dir, target := t.TempDir(), t.TempDir()
-	mkfile(t, filepath.Join(dir, "pkg", "sub", "a"), "a")
+	write(t, filepath.Join(dir, "pkg", "sub", "a"), "a")
 
 	if _, err := Stow(Options{Dir: dir, Target: target, Fold: false}, "pkg"); err != nil {
 		t.Fatalf("Stow --no-folding: %v", err)
@@ -437,7 +425,7 @@ func TestNoFoldingCreatesDirectoriesRatherThanFoldingThem(t *testing.T) {
 // should not be its first execution ever.
 func TestRestowUnstowsThenStows(t *testing.T) {
 	dir, target := t.TempDir(), t.TempDir()
-	mkfile(t, filepath.Join(dir, "pkg", "old"), "old")
+	write(t, filepath.Join(dir, "pkg", "old"), "old")
 
 	opts := Options{Dir: dir, Target: target, Fold: true}
 	if _, err := Stow(opts, "pkg"); err != nil {
@@ -465,7 +453,7 @@ func TestRestowUnstowsThenStows(t *testing.T) {
 // silent: an Unstow that planned a stow would look like a no-op on an empty tree.
 func TestUnstowRemovesWhatStowCreated(t *testing.T) {
 	dir, target := t.TempDir(), t.TempDir()
-	mkfile(t, filepath.Join(dir, "pkg", "f"), "x")
+	write(t, filepath.Join(dir, "pkg", "f"), "x")
 
 	opts := Options{Dir: dir, Target: target, Fold: true}
 	if _, err := Stow(opts, "pkg"); err != nil {
@@ -493,8 +481,8 @@ func TestUnstowRemovesWhatStowCreated(t *testing.T) {
 func TestCanonPathIsFatalWhenItCannotEnterThePath(t *testing.T) {
 	tmp := t.TempDir()
 	dir := t.TempDir()
-	mkfile(t, filepath.Join(dir, "pkg", "f"), "x")
-	mkfile(t, filepath.Join(tmp, "notadir"), "I am a file")
+	write(t, filepath.Join(dir, "pkg", "f"), "x")
+	write(t, filepath.Join(tmp, "notadir"), "I am a file")
 
 	for _, target := range []string{
 		filepath.Join(tmp, "notadir", "under-a-file"),
@@ -519,15 +507,15 @@ func TestCanonPathIsFatalWhenItCannotEnterThePath(t *testing.T) {
 func TestIgnoreFileLineLongerThanAScannerBuffer(t *testing.T) {
 	dir, target := t.TempDir(), t.TempDir()
 	pkg := filepath.Join(dir, "pkg")
-	mkfile(t, filepath.Join(pkg, "keep"), "k")
-	mkfile(t, filepath.Join(pkg, "drop"), "d")
+	write(t, filepath.Join(pkg, "keep"), "k")
+	write(t, filepath.Join(pkg, "drop"), "d")
 
 	// One pattern, far past the Scanner's limit, that still matches "drop".
 	long := "(" + strings.Repeat("nomatch|", 12000) + "drop)"
 	if len(long) < 64*1024 {
 		t.Fatalf("pattern is only %d bytes; this test would not reach the limit", len(long))
 	}
-	mkfile(t, filepath.Join(pkg, ".stow-local-ignore"), long+"\n")
+	write(t, filepath.Join(pkg, ".stow-local-ignore"), long+"\n")
 
 	if _, err := Stow(Options{Dir: dir, Target: target, Fold: false}, "pkg"); err != nil {
 		t.Fatalf("Stow with a long ignore line: %v", err)
