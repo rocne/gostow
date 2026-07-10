@@ -148,13 +148,13 @@ func (e *engine) existsPath(p string) bool {
 func loadIgnoreFile(path string) (*ignoreList, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, fatalf("cannot read ignore file %s (%v)", path, err)
+		return nil, fatalf("cannot read ignore file %s (%s)", path, errnoText(err))
 	}
 	defer func() { _ = f.Close() }()
 
 	patterns, err := parseIgnoreReader(f)
 	if err != nil {
-		return nil, fatalf("cannot read ignore file %s (%v)", path, err)
+		return nil, fatalf("cannot read ignore file %s (%s)", path, errnoText(err))
 	}
 	return compileIgnorePatterns(patterns)
 }

@@ -204,7 +204,7 @@ func (e *engine) readALink(link string) (string, error) {
 	}
 	dest, err := os.Readlink(e.real(link))
 	if err != nil {
-		return "", fatalf("Could not read link: %s (%v)", link, err)
+		return "", fatalf("Could not read link: %s (%s)", link, errnoText(err))
 	}
 	// stow tests the destination for Perl truthiness here, so a link pointing at
 	// the literal string "0" is reported unreadable. Ledger PL-09: ruled a bug,
@@ -258,7 +258,7 @@ func (e *engine) doUnlink(file string) error {
 	e.logOp(opUnlink, noteNone, file)
 	source, err := os.Readlink(e.real(file))
 	if err != nil {
-		return fatalf("could not readlink %s (%v)", file, err)
+		return fatalf("could not readlink %s (%s)", file, errnoText(err))
 	}
 	t := &Task{Action: TaskRemove, Type: TypeLink, Path: file, Source: source}
 	e.plan.tasks = append(e.plan.tasks, t)
@@ -330,23 +330,23 @@ func (e *engine) processTask(t *Task) error {
 	switch {
 	case t.Action == TaskCreate && t.Type == TypeDir:
 		if err := os.Mkdir(e.real(t.Path), 0o777); err != nil {
-			return fatalf("Could not create directory: %s (%v)", t.Path, err)
+			return fatalf("Could not create directory: %s (%s)", t.Path, errnoText(err))
 		}
 	case t.Action == TaskCreate && t.Type == TypeLink:
 		if err := os.Symlink(t.Source, e.real(t.Path)); err != nil {
-			return fatalf("Could not create symlink: %s => %s (%v)", t.Path, t.Source, err)
+			return fatalf("Could not create symlink: %s => %s (%s)", t.Path, t.Source, errnoText(err))
 		}
 	case t.Action == TaskRemove && t.Type == TypeDir:
 		if err := os.Remove(e.real(t.Path)); err != nil {
-			return fatalf("Could not remove directory: %s (%v)", t.Path, err)
+			return fatalf("Could not remove directory: %s (%s)", t.Path, errnoText(err))
 		}
 	case t.Action == TaskRemove && t.Type == TypeLink:
 		if err := os.Remove(e.real(t.Path)); err != nil {
-			return fatalf("Could not remove link: %s (%v)", t.Path, err)
+			return fatalf("Could not remove link: %s (%s)", t.Path, errnoText(err))
 		}
 	case t.Action == TaskMove && t.Type == TypeFile:
 		if err := os.Rename(e.real(t.Path), e.real(t.Dest)); err != nil {
-			return fatalf("Could not move %s -> %s (%v)", t.Path, t.Dest, err)
+			return fatalf("Could not move %s -> %s (%s)", t.Path, t.Dest, errnoText(err))
 		}
 	default:
 		return fatalf("bad task action")

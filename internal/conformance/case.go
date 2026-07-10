@@ -1,6 +1,7 @@
 package conformance
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,7 +28,11 @@ type Case struct {
 	// HomeRc is <root>/home/.stowrc. stow reads both, home first, and
 	// concatenates their tokens; see ledger PL-01.
 	HomeRc string
-	Cwd    string
+	// Root is laid out at the sandbox root, beside stow/ and target/. Rc and
+	// HomeRc cover the ordinary case of an rc *file*; this covers what neither
+	// can express, such as a `.stowrc` that is a directory.
+	Root Tree
+	Cwd  string
 
 	// Pre is an argv run with the *oracle* in both sandboxes before the measured
 	// invocation, to build an already-stowed starting state. Hand-writing those
@@ -62,6 +67,9 @@ func (c Case) Materialize(root string) error {
 		return err
 	}
 	if err := c.Target.Materialize(filepath.Join(root, "target")); err != nil {
+		return err
+	}
+	if err := c.Root.Materialize(root); err != nil {
 		return err
 	}
 	for path, content := range map[string]string{
@@ -129,14 +137,45 @@ func (c Case) Exec(t *testing.T, bin string) Run {
 // paths at verbosity 2 and above.
 func (c Case) ExecAt(t *testing.T, bin, root string) (Run, string) {
 	t.Helper()
+	RestorePermissionsOnCleanup(t, root)
 	if err := c.Materialize(root); err != nil {
 		t.Fatalf("materialize case %q: %v", c.Name, err)
 	}
 	run := RunBinary(bin, c.argv(root), c.environ(root), filepath.Join(root, c.Cwd))
+	RestorePermissions(root)
 	tree, err := Snapshot(root)
 	if err != nil {
 		t.Fatalf("snapshot case %q: %v", c.Name, err)
 	}
 	run.Tree = tree
 	return run, root
+}
+
+// RestorePermissions makes every directory under root searchable again.
+//
+// A fixture that chmods a directory to 000, or drops a target's search bit, is
+// exactly the shape needed to reproduce stow's errno-bearing fatal paths. It is
+// also a directory that neither Snapshot nor os.RemoveAll can enter, so the mode
+// has to come back off once the binary under test has exited. Nothing compared by
+// the differential harness records a mode, so restoring one loses no evidence —
+// and both sandboxes are restored identically.
+func RestorePermissions(root string) {
+	// WalkDir calls fn on a directory before reading it, so the chmod here
+	// re-opens the door the fixture closed.
+	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d == nil || !d.IsDir() {
+			return nil
+		}
+		_ = os.Chmod(p, 0o755)
+		return nil
+	})
+}
+
+// RestorePermissionsOnCleanup is RestorePermissions run before t.TempDir's own
+// cleanup, so a test that fails early still leaves a removable sandbox. Cleanups
+// run last-registered-first, so this must be registered *after* the t.TempDir
+// that created root.
+func RestorePermissionsOnCleanup(t *testing.T, root string) {
+	t.Helper()
+	t.Cleanup(func() { RestorePermissions(root) })
 }

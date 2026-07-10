@@ -31,7 +31,9 @@ func AssertSameAsOracle(t *testing.T, c Case) {
 	gostow := GostowPath(t)
 
 	oracleRoot := t.TempDir()
+	RestorePermissionsOnCleanup(t, oracleRoot)
 	gostowRoot := t.TempDir()
+	RestorePermissionsOnCleanup(t, gostowRoot)
 	if err := c.Materialize(oracleRoot); err != nil {
 		t.Fatalf("materialize oracle sandbox: %v", err)
 	}
@@ -119,6 +121,7 @@ func (c Case) preArgv(root string) []string { return expandAll(c.Pre, root) }
 func runIn(t *testing.T, bin string, c Case, root string) Run {
 	t.Helper()
 	run := RunBinary(bin, c.argv(root), c.environ(root), filepath.Join(root, c.Cwd))
+	RestorePermissions(root)
 	tree, err := Snapshot(root)
 	if err != nil {
 		t.Fatalf("snapshot %q: %v", root, err)

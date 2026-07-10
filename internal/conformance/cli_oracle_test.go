@@ -315,6 +315,62 @@ func TestCLIAgainstOracle(t *testing.T) {
 			Env:  []string{"STOW_DIR=" + SandboxToken + "/nosuchdir"},
 			Args: []string{"-v", "-t", "target", "pkg"},
 		},
+
+		// --- error paths, and the non-happy path above verbosity 0 ------------
+		//
+		// Everything above this comment is a clean stow, or a conflict at
+		// verbosity 0. That was the whole hole: four parity bugs lived here,
+		// found by an audit rather than by this suite. See docs/TEST-PLAN.md §3.4.
+		{
+			// Stow.pm's conflict() opens with debug(2, 0, "CONFLICT when
+			// ${action}ing $package: $message"). gostow only appended to a slice,
+			// so at -vv it dropped a line real stow prints. Invisible to the
+			// verbosity subsequence test, which compares gostow to itself.
+			Name:   "a conflict prints its CONFLICT line at -vv",
+			Stow:   Tree{"pkg/f": F("a")},
+			Target: Tree{"f": F("b")},
+			Args:   args("-vv", "pkg"),
+		},
+		{
+			Name:   "an unstow conflict prints its CONFLICT line at -vv",
+			Stow:   Tree{"pkg/f": F("a")},
+			Target: Tree{"f": F("b")},
+			Args:   args("-vv", "-D", "pkg"),
+		},
+		{
+			// The package subdirectory cannot be read, and the target has a real
+			// directory in its place, so stow must descend instead of folding.
+			// stow interpolates $! — "(Permission denied)"; gostow used to
+			// interpolate Go's error, which names the syscall and the absolute
+			// path. Exit is errno-derived (13), hence FatalExitDiverges.
+			Name:              "an unreadable package directory is fatal, with stow's errno wording",
+			Stow:              Tree{"pkg/sub/f": F("x"), "pkg/sub": D().Chmod(0o000)},
+			Target:            Tree{"sub": D()},
+			Args:              args("pkg"),
+			FatalExitDiverges: true,
+		},
+		{
+			// Stow::Util::canon_path chdirs and dies when it cannot. A target that
+			// exists but has no search bit is fatal before any planning — even
+			// under -n, where gostow used to report success and exit 0.
+			Name:              "a target directory without its search bit is fatal even under -n",
+			Stow:              Tree{"pkg/f": F("x")},
+			Target:            Tree{},
+			Root:              Tree{"target": D().Chmod(0o644)},
+			Args:              args("-n", "pkg"),
+			FatalExitDiverges: true,
+		},
+		{
+			// open(2) of a directory succeeds; the first read returns EISDIR.
+			// Perl's readline poisons the handle, close fails, and stow dies
+			// having stowed nothing. gostow ignored the read error, treated the
+			// rc file as empty, and stowed the package.
+			Name:              "a .stowrc that is a directory is fatal and stows nothing",
+			Stow:              Tree{"pkg/f": F("x")},
+			Root:              Tree{".stowrc": D()},
+			Args:              args("pkg"),
+			FatalExitDiverges: true,
+		},
 	}
 
 	for _, c := range cases {

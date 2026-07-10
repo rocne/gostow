@@ -2,7 +2,9 @@ package cli
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -37,24 +39,55 @@ func readStowrcTokens(fixQuirks bool) ([]string, error) {
 		if err != nil {
 			continue
 		}
-		sc := bufio.NewScanner(f)
-		for sc.Scan() {
-			line := sc.Text()
+		lines, readErr := readLines(f)
+		_ = f.Close()
+
+		// A failed read is what stow reports as a failed close. Perl's readline
+		// poisons the handle, so `close` returns false and stow dies — which is
+		// how `.stowrc` being a *directory* (open(2) succeeds; the first read
+		// returns EISDIR) stops stow before it touches anything. Go's Close
+		// reports none of that, so the read error has to be consulted directly.
+		// Ignoring it made gostow treat an unreadable rc file as an empty one and
+		// stow the package anyway: the same shape as the swallowed EISDIR that
+		// once disabled all ignoring.
+		if readErr != nil {
+			return nil, &dieError{msg: fmt.Sprintf("Could not close open file: %s", file)}
+		}
+
+		for _, line := range lines {
 			if fixQuirks {
 				line = stripComment(line)
 			}
 			words, err := shellwords(line)
 			if err != nil {
-				_ = f.Close()
 				return nil, err
 			}
 			tokens = append(tokens, words...)
 		}
-		if err := f.Close(); err != nil {
-			return nil, &dieError{msg: fmt.Sprintf("Could not close open file: %s", file)}
-		}
 	}
 	return tokens, nil
+}
+
+// readLines reads f the way Perl's `while (my $line = <$FILE>) { chomp $line; }`
+// does. It uses a bufio.Reader rather than a bufio.Scanner because a Scanner
+// fails on any line over 64 KiB, and Perl imposes no such limit: a long line in
+// a config file must not be the difference between a working stow and a broken
+// one.
+func readLines(f *os.File) ([]string, error) {
+	var lines []string
+	br := bufio.NewReader(f)
+	for {
+		line, err := br.ReadString('\n')
+		if line != "" {
+			lines = append(lines, strings.TrimSuffix(strings.TrimSuffix(line, "\n"), "\r"))
+		}
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return lines, nil
+			}
+			return nil, err
+		}
+	}
 }
 
 // shellwords ports Perl's Text::ParseWords::shellwords: split on whitespace,

@@ -293,3 +293,61 @@ func TestFixQuirksDoesNotDisturbOrdinaryStowing(t *testing.T) {
 		}
 	}
 }
+
+// Apply used to have no default arm: an unknown Action planned nothing and
+// returned success. For a semver-bound library that dstow drives
+// programmatically, a silent no-op on a caller's bug is the worst available
+// answer — the engine already treats an impossible TaskAction as fatal, and an
+// impossible Action is the same kind of mistake.
+func TestApplyRejectsAnUnknownAction(t *testing.T) {
+	dir, target := t.TempDir(), t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "pkg"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "pkg", "f"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := Apply(Options{Dir: dir, Target: target, Fold: true},
+		Request{Action: Action(7), Packages: []string{"pkg"}})
+
+	var fe *FatalError
+	if !errors.As(err, &fe) {
+		t.Fatalf("Apply with a bogus action returned %v, want a FatalError", err)
+	}
+	if _, err := os.Lstat(filepath.Join(target, "f")); err == nil {
+		t.Error("Apply with a bogus action wrote to the target")
+	}
+}
+
+// Gerund is the word stow interpolates into both the level-2 CONFLICT line and
+// the conflict banner. It is a table rather than String()+"ing" precisely so a
+// rename of the Stringer cannot move those bytes; assert the table, so a rename
+// of Gerund's arms cannot either.
+func TestGerund(t *testing.T) {
+	for action, want := range map[Action]string{
+		ActionStow:   "stowing",
+		ActionUnstow: "unstowing",
+		ActionRestow: "restowing",
+	} {
+		if got := Gerund(action); got != want {
+			t.Errorf("Gerund(%v) = %q, want %q", action, got, want)
+		}
+	}
+}
+
+// Action.String has no caller in gostow. It exists so %v prints something sane in
+// a library consumer's logs, and it is documented as free to be renamed — which
+// is only safe while nothing parity-pinned reads it. Pin the text so a rename is
+// a deliberate act rather than a silent change to somebody else's log lines.
+func TestActionString(t *testing.T) {
+	for action, want := range map[Action]string{
+		ActionStow:   "stow",
+		ActionUnstow: "unstow",
+		ActionRestow: "restow",
+	} {
+		if got := action.String(); got != want {
+			t.Errorf("Action(%d).String() = %q, want %q", int(action), got, want)
+		}
+	}
+}
