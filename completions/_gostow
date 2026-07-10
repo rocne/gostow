@@ -1,0 +1,46 @@
+#compdef gostow
+# zsh completion for gostow(8).
+#
+# The `#compdef` tag above names only `gostow`. zsh, unlike bash and fish, would
+# happily let this one file claim `stow` as well — compinit reads the tag rather
+# than the filename. It does not, for consistency with the other two shells and
+# because the name belongs to GNU Stow: gostow is a drop-in, not a replacement
+# package (see .goreleaser/gostow.yaml). If you have symlinked stow -> gostow,
+# opt in from your zshrc, after compinit:
+#
+#     compdef _gostow stow
+
+# Packages are the subdirectories of the stow directory, resolved exactly as
+# gostow resolves it: -d/--dir, else $STOW_DIR, else the current directory.
+# opt_args is populated by _arguments as it parses, so a -d already on the line
+# steers the package completion that follows it.
+_gostow_packages() {
+    local dir
+    dir=${opt_args[-d]:-${opt_args[--dir]:-${STOW_DIR:-.}}}
+    _path_files -/ -W "$dir"
+}
+
+_gostow() {
+    _arguments -s -S \
+        '(-d --dir)'{-d+,--dir=}'[set the stow directory]:stow directory:_files -/' \
+        '(-t --target)'{-t+,--target=}'[set the target directory]:target directory:_files -/' \
+        '*'{-S,--stow}'[stow the packages that follow]' \
+        '*'{-D,--delete}'[unstow the packages that follow]' \
+        '*'{-R,--restow}'[unstow then restow the packages that follow]' \
+        '--dotfiles[translate a leading dot- to .]' \
+        '*--ignore=[skip files whose path ends with this regex]:regex:' \
+        '*--defer=[skip files another package already stowed]:regex:' \
+        '*--override=[replace files another package already stowed]:regex:' \
+        '--adopt[move a conflicting target file into the package]' \
+        '--no-folding[never fold a directory into one symlink]' \
+        '(-p --compat)'{-p,--compat}'[unstow with the legacy scanning algorithm]' \
+        '(-n --no --simulate)'{-n,--no,--simulate}'[plan the run, change nothing]' \
+        '*'{-v,--verbose=}'[increase verbosity (0-5)]::level:(0 1 2 3 4 5)' \
+        '(- *)'{-V,--version}'[print the version and exit]' \
+        '(- *)'{-h,--help}'[print help and exit]' \
+        '(- *)--gostow-help[explain gostow'\''s extensions and exit]' \
+        '--gostow-fix[fix GNU Stow'\''s defects instead of matching them]' \
+        '*:package:_gostow_packages'
+}
+
+_gostow "$@"

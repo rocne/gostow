@@ -262,6 +262,38 @@ fixtures drive them through the binary. Coverage of those is now real coverage.
 
 ---
 
+### 3.7 A document's comments are not its content
+
+`TestManPageDocumentsEveryOptionStowDocumentsAnywhere` asserts that gostow's man page names
+every option GNU Stow documents anywhere. It read `man/gostow.8` as one string and searched
+it for each flag. Deleting `--compat` from the OPTIONS section left it green.
+
+The page's header comment explains why the page exists, and says so by naming the two
+options stow's own references omit: *"`stow --help` never mentions `--no-folding`, and
+`stow.8` never mentions `--compat`/`-p`."* The test was satisfied by a `.\"` comment
+**about** a flag rather than documentation **of** it. Any prose the file happened to contain
+would have done — a TODO, a changelog line, a note to a reviewer.
+
+The parallel to §3.4 is exact. There, a code path ran without its interesting input; here, a
+document was searched without being parsed. In both, the test executed the right region and
+examined the wrong thing.
+
+Both readers now strip `.\"` lines before matching, and each of the three completion scripts
+is stripped of `#` comments before `TestCompletionsDoNotClaimTheNameStow` asks which commands
+it registers — necessarily, since every one of them documents, in a comment, the very
+`complete … stow` line that test forbids in code.
+
+The generalisation, and the reason this is not just a note about roff: **when a test searches
+a file for a token, decide first which regions of that file are allowed to answer.** A test
+that greps a whole file is asserting something about the file, not about the artefact.
+
+Found by mutating the man page and watching the test stay green — which is also the only
+reason the two `assertRegisters` extractors exist rather than a `grep` for the word `stow`.
+That grep matched zsh's description text (`[set the stow directory]`) and fish's `-l stow`,
+which is how fish spells the entirely legitimate option `--stow`.
+
+---
+
 ## 4. Porting stow's own suite
 
 stow's `t/*.t` is ~478 assertions across 16 files. It is the only artefact that encodes

@@ -56,9 +56,14 @@ func mustHelp(t *testing.T, who, bin string) string {
 var (
 	// A long option, anywhere: --dir, --verbose[=N], --no.
 	reLongFlag = regexp.MustCompile(`--([a-z][a-z-]*)`)
-	// A short option, only where an option list would put one: at the start of
-	// an indented line, followed by a space or a comma.
-	reShortFlag = regexp.MustCompile(`(?m)^\s+(-[A-Za-z])[ ,]`)
+	// A short option, only where an option list would put one: at the start of an
+	// indented line, followed by a space, a comma, or the end of the line.
+	//
+	// "or the end of the line" is not decoration. stow --help writes "-p, --compat"
+	// on one line, but stow.8 gives each spelling its own line — so without the
+	// `$` branch this pattern finds -d and -t (which are followed by " DIR") and
+	// silently misses -n, -v, -S, -D and -R.
+	reShortFlag = regexp.MustCompile(`(?m)^\s+(-[A-Za-z])([ ,]|$)`)
 )
 
 // documentedFlags returns the sorted, deduplicated set of options a help block

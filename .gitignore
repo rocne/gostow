@@ -39,3 +39,6 @@ go.work.sum
 
 # Pinned GNU Stow conformance oracle (test/install-stow-oracle.sh)
 /.oracle/
+
+# Compressed man page, built by the goreleaser `before` hook for the .deb/.rpm.
+/man/*.gz

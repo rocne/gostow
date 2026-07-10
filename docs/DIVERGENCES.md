@@ -124,6 +124,39 @@ pattern alone. Nobody has produced one yet.
 
 ---
 
+## 5. Things gostow installs under its own name
+
+**`man gostow`, not `man stow`.** gostow ships a manual page and completions for bash, zsh
+and fish, all named after `gostow`. It does not answer to stow's names, and that is
+deliberate rather than an oversight.
+
+The pages and scripts live at paths a package owns: `/usr/share/man/man8/stow.8`,
+`/usr/share/bash-completion/completions/stow`, `/usr/share/fish/vendor_completions.d/stow.fish`.
+Those belong to the `stow` package. Installing our own files there would be a file conflict
+in apt and dnf, and it would silently replace GNU Stow's manual on any machine that has
+both. gostow is a drop-in replacement for the *binary*, not a replacement for the *package*
+— it does not claim the name `stow` in any namespace, including apt, dnf, and completion.
+
+Nor can the second name simply be registered from inside gostow's own file, except in zsh.
+Bash and fish autoload a completion by opening a file named after the command being
+completed, so the registration would never run. Registering it in zsh alone would give a
+completion that appears in one shell and not the others, which is worse than none.
+
+If you have symlinked `stow` to gostow, opt in from your shell's rc file:
+
+```
+complete -F _gostow stow            # bash
+compdef _gostow stow                # zsh, after compinit
+complete -c stow --wraps gostow     # fish
+```
+
+GNU Stow ships no completions of its own, so nothing is being overridden. And gostow's
+manual page documents every option gostow accepts — which is more than either of GNU Stow's
+own references manages, since `stow --help` omits `--no-folding` and `stow.8` omits
+`--compat`.
+
+---
+
 ## The `--gostow-` convention
 
 gostow adds no flags to stow's namespace. Anything gostow invents is prefixed

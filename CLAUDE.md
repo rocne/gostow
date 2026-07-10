@@ -265,9 +265,35 @@ with `EXDEV`. **Ask what a fixture format cannot say**: the differential harness
 sandbox root, so no fixture could ever put the two directories on different filesystems.
 TEST-PLAN §3.5.
 
+### The man page and shell completions (2026-07-10)
+
+`man/gostow.8` and `completions/{gostow.bash,_gostow,gostow.fish}` ship in the tarball, the
+`.deb`/`.rpm` and the Homebrew cask. **`spec()` is the single source of truth**, and
+`internal/cli/docs_test.go` requires the man page and all three completion scripts to name
+*exactly* the options it declares — equality in both directions, so a typo'd `--dotfile`
+next to the real `--dotfiles` is a failure and not a silent no-op.
+
+Writing them turned up PL-24: **neither of GNU Stow's option references is complete, and
+they omit different options.** `stow --help` never names `--no-folding`; `stow.8` never names
+`--compat` or `-p`. The oracle test asserts that disagreement as its own premise, so if
+upstream ever fixes it we find out rather than quietly testing nothing.
+
+**gostow does not claim the name `stow`** — not in apt/dnf (already true of the package
+name), and now not in `man` or completion either. In bash and fish the *filename* is what
+the loader opens, so registering `stow` from inside gostow's own file is dead code, and
+making it live means shipping a file at a path the `stow` package owns. zsh would have
+allowed it; a completion present in one shell and absent in two is worse than none.
+`TestCompletionsDoNotClaimTheNameStow` pins that decision. The drop-in opt-in is one line
+per shell, documented in each script, in the README and in `docs/DIVERGENCES.md` §5.
+
+`GOSTOW_REQUIRE_DOC_TOOLS=1` turns a missing `groff`/`zsh`/`fish` from a skip into a
+failure; CI's conformance job installs all three and sets it. A skipping test is a vacuous
+pass, and a completion script the user's shell cannot parse breaks their login.
+
 Still owed before v1:
 
-- Upstream bug reports: PL-01, PL-03, PL-04, PL-05, PL-06, PL-08, PL-09, PL-10, PL-18, PL-21.
+- Upstream bug reports: PL-01, PL-03, PL-04, PL-05, PL-06, PL-08, PL-09, PL-10, PL-18,
+  PL-21, PL-24.
 - `--adopt` across a filesystem boundary (EXDEV) has no fixture; it needs two mount points.
 
 `chkstow` is ruled **out of scope for v1** (SPEC §12). `--compat` and the PL-04
