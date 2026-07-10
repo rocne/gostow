@@ -2,6 +2,8 @@ package stow
 
 import (
 	"bufio"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -181,18 +183,29 @@ func parseIgnoreReader(r interface{ Read([]byte) (int, error) }) ([]string, erro
 	}
 
 	commentSuffix := regexp.MustCompile(`\s+#.+`)
-	sc := bufio.NewScanner(r)
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
+
+	// A bufio.Reader, not a bufio.Scanner: a Scanner fails on any line over 64 KiB
+	// and Perl imposes no such limit, so a long pattern would make gostow refuse a
+	// file real stow reads without complaint. The read error still has to be
+	// consulted — a directory opens fine and returns EISDIR on the first read, and
+	// swallowing that once disabled every ignore rule (ledger PL-10).
+	br := bufio.NewReader(r)
+	for {
+		text, err := br.ReadString('\n')
+		if text != "" {
+			line := strings.TrimSpace(text)
+			if line != "" && !strings.HasPrefix(line, "#") {
+				line = commentSuffix.ReplaceAllString(line, "")
+				line = strings.ReplaceAll(line, `\#`, "#")
+				add(line)
+			}
 		}
-		line = commentSuffix.ReplaceAllString(line, "")
-		line = strings.ReplaceAll(line, `\#`, "#")
-		add(line)
-	}
-	if err := sc.Err(); err != nil {
-		return nil, err
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				return nil, err
+			}
+			break
+		}
 	}
 	add(`^/\.stow-local-ignore$`)
 	return out, nil

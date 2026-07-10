@@ -512,3 +512,30 @@ func TestCanonPathIsFatalWhenItCannotEnterThePath(t *testing.T) {
 		}
 	}
 }
+
+// Perl imposes no line-length limit on an ignore file; a bufio.Scanner errors
+// past 64 KiB. gostow must read the long pattern, not reject a file real stow
+// reads without complaint. Audit item U2.
+func TestIgnoreFileLineLongerThanAScannerBuffer(t *testing.T) {
+	dir, target := t.TempDir(), t.TempDir()
+	pkg := filepath.Join(dir, "pkg")
+	mkfile(t, filepath.Join(pkg, "keep"), "k")
+	mkfile(t, filepath.Join(pkg, "drop"), "d")
+
+	// One pattern, far past the Scanner's limit, that still matches "drop".
+	long := "(" + strings.Repeat("nomatch|", 12000) + "drop)"
+	if len(long) < 64*1024 {
+		t.Fatalf("pattern is only %d bytes; this test would not reach the limit", len(long))
+	}
+	mkfile(t, filepath.Join(pkg, ".stow-local-ignore"), long+"\n")
+
+	if _, err := Stow(Options{Dir: dir, Target: target, Fold: false}, "pkg"); err != nil {
+		t.Fatalf("Stow with a long ignore line: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(target, "keep")); err != nil {
+		t.Errorf("keep was not stowed: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(target, "drop")); !os.IsNotExist(err) {
+		t.Errorf("drop was stowed despite the long ignore pattern (err = %v)", err)
+	}
+}

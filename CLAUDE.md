@@ -182,17 +182,23 @@ ignore lists; and reports conflicts and exit codes.
 Layout: `stow/` is the engine (a deep module: `Apply` plus `Stow`/`Unstow`/`Restow`
 sugar), `internal/stowpath` holds the ports of stow's path helpers that both the engine
 and the CLI need (it exists because `parent` was copied instead of shared, and the copy
-was wrong), `internal/getopt` is a `Getopt::Long`-compatible parser, `internal/cli` is the
+was wrong), `internal/getopt` is a `Getopt::Long`-compatible parser (its `Option.Validate`
+is Getopt::Long's callback, which is what makes a bad `--ignore` regex a parse failure), `internal/cli` is the
 front end, `internal/ui` is colour-on-a-TTY, `internal/conformance` is the differential
 harness.
 
-Validation: `go test ./...` is hermetic. `go test -tags oracle ./...` additionally runs
-**6307 argv vectors against real `Getopt::Long`**, **1216 ignore verdicts** against
-`Stow.pm`'s own `ignore()`, and **62 differential fixtures** (20 engine-level, 42 driving
-the whole binary) against real stow 2.4.1, comparing stdout, stderr, exit code and the
-resulting tree. Install the oracle with `PREFIX=$PWD/.oracle bash test/install-stow-oracle.sh`
-(`.oracle/` is gitignored; CI installs to `/usr/local` via sudo). Counts are printed by the
-tests themselves — never hand-copy one into a document.
+Validation: `go test ./...` is hermetic — including the **L5 goldens layer**, which replays
+the differential fixtures against recordings of the oracle. `go test -tags oracle ./...`
+additionally runs argv vectors against real `Getopt::Long`, ignore verdicts against
+`Stow.pm`'s own `ignore()`, `parent` and `join_paths` against `Stow::Util`, errno strings
+against Perl's `$!`, and the differential fixtures against real stow 2.4.1, comparing stdout,
+stderr, exit code and the resulting tree. Install the oracle with
+`PREFIX=$PWD/.oracle bash test/install-stow-oracle.sh` (`.oracle/` is gitignored; CI installs
+to `/usr/local` via sudo). Regenerate goldens with
+`go test -tags oracle ./internal/conformance/ -update-goldens`.
+
+**Counts are printed by the tests themselves — never hand-copy one into a document.** Two
+documents had already drifted by the time anyone checked.
 
 The ledger is fully ruled, PL-01..PL-19. The highest-severity finding is **PL-18**:
 `Stow.pm` interpolates `$ENV{HOME}` into a regex unescaped, so any user whose home path
@@ -219,9 +225,34 @@ the one substantial piece of copied *prose* — the `--help` block — was rewri
 gostow's own words (SPEC §4.5). The ignore patterns and the error messages stay verbatim
 because they *are* the behaviour, and `NOTICE` records that.
 
+### The 2026-07-10 audit
+
+An external audit (`docs/audit-2026-07-10.md`) found **six parity bugs**, all reproduced
+against the real binary before anything was changed, all now fixed and pinned. They shared
+one address: **error paths, and non-zero verbosity on a non-happy path** — regions the suite
+*executed* and never *examined*. The engine's core matched the oracle under a dozen
+adversarial probes.
+
+Three lessons, all now enforced rather than remembered:
+
+- **Coverage of a code path is not coverage of its inputs.** `parent` ran on every test run,
+  never once with a single-segment absolute path.
+- **`go test -coverprofile` cannot see a binary the harness execs.** `doMv` read 0% while
+  fixtures drove it, because coverage is linked into the test binary, not the subprocess.
+  Same blind spot as the test cache. The engine's destructive paths are now driven in
+  process too. TEST-PLAN §3.5.
+- **A fixture can be vacuous.** `Node.Mode` used zero to mean "unset", so `Mode: 0o000` made
+  an "unreadable" directory readable. Mutate the code; watch the test go red. Every fix in
+  that audit's wake was confirmed that way.
+
+The goldens layer (L5) now exists: `go test ./...` checks gostow against recordings of the
+pinned oracle, with no Perl. Regenerate with `-update-goldens`, which is declared only under
+the `oracle` build tag so the hermetic suite cannot rewrite its own answers.
+
 Still owed before v1:
 
-- Upstream bug reports: PL-01, PL-03, PL-04, PL-05, PL-06, PL-08, PL-09, PL-10, PL-18.
+- Upstream bug reports: PL-01, PL-03, PL-04, PL-05, PL-06, PL-08, PL-09, PL-10, PL-18, PL-21.
+- `--adopt` across a filesystem boundary (EXDEV) has no fixture; it needs two mount points.
 
 `chkstow` is ruled **out of scope for v1** (SPEC §12). `--compat` and the PL-04
 protection asymmetry are both pinned by differential fixtures. `ignore.t` is settled without
