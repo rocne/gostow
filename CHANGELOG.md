@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.1](https://github.com/rocne/gostow/compare/v0.1.0...v0.1.1) (2026-07-10)
+
+
+### Bug Fixes
+
+* **cli:** default --target aimed at "/" for a single-segment stow dir ([d59f15b](https://github.com/rocne/gostow/commit/d59f15b815bd889233938848b0378fd3c2aba9f1))
+* **cli:** default --target aimed at "/" for a single-segment stow dir ([db50ba6](https://github.com/rocne/gostow/commit/db50ba6f0d41f4185d2f2d1eb6eea8742a879b5f))
+* **cli:** make --version tell the truth; document every install path ([#16](https://github.com/rocne/gostow/issues/16)) ([04a4d42](https://github.com/rocne/gostow/commit/04a4d421e3c67507e6dd006e22d12c1dad1e31d1))
+* read ignore files without bufio.Scanner's 64 KiB line limit ([#22](https://github.com/rocne/gostow/issues/22)) ([1626697](https://github.com/rocne/gostow/commit/1626697f5ce6a7c1fef3fdff0f8bdb91b106c287))
+* six parity bugs found by the 2026-07-10 audit ([#20](https://github.com/rocne/gostow/issues/20)) ([d5bb097](https://github.com/rocne/gostow/commit/d5bb097c447bad78336679b75a371fd71e26fdb1))
+
 ## 0.1.0 (2026-07-09)
 
 
