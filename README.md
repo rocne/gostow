@@ -142,6 +142,24 @@ line diverges — see [docs/DIVERGENCES.md](docs/DIVERGENCES.md).
 If GNU Stow is also installed, make sure `/usr/local/bin` precedes `/usr/bin` on your
 `PATH`, or the Perl one wins.
 
+### Manual and shell completion
+
+`man gostow` documents every option, and the `.deb`, `.rpm`, cask and tarball all carry
+completions for bash, zsh and fish.
+
+Both are installed under gostow's own name, never stow's. `man stow` and `stow<TAB>` belong
+to the `stow` package: in bash and fish the *filename* is what the completion loader looks
+up, so claiming them would mean shipping a file at a path another package owns. If you have
+symlinked `stow` to gostow and want completion for that name too, opt in explicitly:
+
+```console
+$ complete -F _gostow stow            # bash, in ~/.bashrc
+$ compdef _gostow stow                # zsh, in ~/.zshrc after compinit
+$ complete -c stow --wraps gostow     # fish, in ~/.config/fish/config.fish
+```
+
+GNU Stow ships no completions at all, so nothing is being overridden.
+
 ## What's different
 
 Almost nothing, on purpose. The exhaustive list is in **[docs/DIVERGENCES.md](docs/DIVERGENCES.md)**,
@@ -153,9 +171,10 @@ and `gostow --gostow-help` summarises it at the terminal. In brief:
   `.stow-local-ignore` exists but cannot be read. gostow does none of these.
 - **gostow colours its output on a terminal**, and only on a terminal. Pipe it, redirect it,
   or set `NO_COLOR`, and every byte is stow's. *Byte-compatible on a pipe, prettier on a TTY.*
-- **`gostow --help` is gostow's own prose**, and documents `--no-folding` — a real, working
-  flag that stow's help has never mentioned. Option *parsing*, the usage diagnostic on
-  stderr, and exit codes are all still byte-exact.
+- **`gostow --help` and `man gostow` are gostow's own prose**, and each documents every
+  option. Neither of stow's own references does: `stow --help` never mentions
+  `--no-folding`, and `stow.8` never mentions `--compat`. Option *parsing*, the usage
+  diagnostic on stderr, and exit codes are all still byte-exact.
 - **`--gostow-fix`** turns off the remaining bug-compatibility — stow's `.stowrc` having no
   comment syntax, `stow -- pkg` silently discarding `pkg`, `RMDIR` printing without a colon,
   and a real `--dotfiles` protection bypass. Everything gostow adds is prefixed `--gostow-`

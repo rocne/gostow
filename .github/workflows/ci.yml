@@ -97,11 +97,18 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Install build deps for the oracle
-        run: sudo apt-get update && sudo apt-get install -y texinfo
+      # texinfo builds the oracle. groff, zsh and fish check the man page and the
+      # completion scripts: a completion script whose shell cannot parse it breaks
+      # the user's shell startup, and neither zsh nor fish is installed by default
+      # on a runner. GOSTOW_REQUIRE_DOC_TOOLS below turns a missing one into a
+      # failure rather than a skip, so this list going stale cannot pass silently.
+      - name: Install build deps for the oracle and the doc tooling
+        run: sudo apt-get update && sudo apt-get install -y texinfo groff zsh fish
 
       - name: Build + install pinned GNU Stow oracle
         run: sudo bash test/install-stow-oracle.sh
 
       - name: Conformance tests (differential vs real stow)
         run: go test -count=1 -tags oracle ./...
+        env:
+          GOSTOW_REQUIRE_DOC_TOOLS: "1"

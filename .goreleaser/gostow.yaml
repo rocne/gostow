@@ -5,6 +5,11 @@ project_name: gostow
 before:
   hooks:
     - go mod tidy
+    # Debian policy wants a compressed man page, and rpm's brp-compress never
+    # runs here because nfpm builds the package without rpmbuild. Compress it
+    # ourselves, once, for both. The archives ship the uncompressed original.
+    # man/gostow.8.gz is a build artifact and is gitignored.
+    - gzip -9 --keep --force man/gostow.8
 
 builds:
   - id: gostow
@@ -33,10 +38,17 @@ archives:
     # README but not NOTICE. NOTICE records what gostow reproduces from GNU Stow
     # and under what reasoning; attribution that does not ship with the binary is
     # not attribution.
+    #
+    # The man page and completions ride along at their repo-relative paths, which
+    # is what the homebrew_casks stanzas below reference.
     files:
       - LICENSE
       - NOTICE
       - README.md
+      - man/gostow.8
+      - completions/gostow.bash
+      - completions/_gostow
+      - completions/gostow.fish
 
 nfpms:
   - id: gostow
@@ -56,6 +68,24 @@ nfpms:
     description: GNU Stow, reimplemented in Go — a single static binary, no Perl
     license: MIT
     bindir: /usr/bin
+    # Section 8, following GNU Stow: these tools administer a directory tree, and
+    # `man gostow` finds the page whatever section it lives in. The file is named
+    # gostow.8, never stow.8 — the stow(8) page belongs to the `stow` package, and
+    # shipping our own at that path would be a dpkg/rpm file conflict.
+    #
+    # The bash completion is installed as `gostow` with no extension, because that
+    # filename is the lookup key: bash's loader opens the file named after the
+    # command being completed. For the same reason there is no `stow` entry here.
+    # The completion scripts document the one-line opt-in for a drop-in symlink.
+    contents:
+      - src: man/gostow.8.gz
+        dst: /usr/share/man/man8/gostow.8.gz
+      - src: completions/gostow.bash
+        dst: /usr/share/bash-completion/completions/gostow
+      - src: completions/_gostow
+        dst: /usr/share/zsh/site-functions/_gostow
+      - src: completions/gostow.fish
+        dst: /usr/share/fish/vendor_completions.d/gostow.fish
     rpm:
       signature:
         key_file: "{{ .Env.GPG_KEY_PATH }}"
@@ -83,6 +113,15 @@ homebrew_casks:
     homepage: https://github.com/rocne/gostow
     description: GNU Stow, reimplemented in Go — a single static binary, no Perl
     license: MIT
+    # Paths into the extracted archive, which is why `archives.files` above must
+    # carry them. Homebrew links the manpage into its own man tree and each
+    # completion into the directory its shell already searches.
+    manpages:
+      - man/gostow.8
+    completions:
+      bash: completions/gostow.bash
+      zsh: completions/_gostow
+      fish: completions/gostow.fish
     # Binaries are not notarized; strip the Gatekeeper quarantine xattr on install
     # so the cask-installed gostow runs without "cannot be opened" errors on macOS.
     hooks:
