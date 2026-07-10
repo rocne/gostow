@@ -313,6 +313,10 @@ func Gerund(a Action) string {
 	case ActionUnstow:
 		return "unstowing"
 	case ActionRestow:
+		// Unreachable through the CLI, and upstream is the same: every conflict()
+		// call in Stow.pm passes 'stow'. Kept because Action is a public type and
+		// a library consumer may hold ActionRestow, and because a missing arm here
+		// would silently print "stowing" for it.
 		return "restowing"
 	default:
 		return "stowing"
@@ -376,6 +380,15 @@ func (e *engine) dirExists(p string) bool {
 
 // readdirSorted lists a directory the way stow does: `sort readdir`, which is a
 // bytewise sort, with "." and ".." dropped.
+//
+// stow has two wordings for a failed opendir. stow_contents, unstow_contents and
+// cleanup_invalid_links say `cannot read directory: $dir ($!)`; foldable and
+// fold_tree say `Cannot read directory "$dir" ($!)\n` — capital C, quoted path,
+// embedded newline. Only the first is transcribed here, and deliberately: every
+// opendir in foldable and fold_tree is preceded by an opendir of the *same*
+// directory from one of the first three, which would fail first with this
+// message. Only a race between the two could expose the difference. Do not
+// "unify" these in either direction without re-deriving that argument.
 func (e *engine) readdirSorted(p string) ([]string, error) {
 	entries, err := os.ReadDir(e.real(p))
 	if err != nil {
@@ -788,7 +801,14 @@ func (e *engine) cleanupInvalidLinks(dir string) error {
 		}
 		if t, ok := e.plan.linkTaskFor[nodePath]; ok {
 			if t.Action != TaskRemove {
-				fmt.Fprintf(e.log, "Unexpected action scheduled for %s; skipping clean-up\n", nodePath)
+				// Unreachable, and byte-exact anyway. Cleanup runs only during the
+				// unstow phase, which wholly precedes any phase that could file a
+				// create task against an on-disk symlink — the same argument that
+				// makes PL-06's crash unreachable. It is transcribed exactly
+				// because the justification for every line in this file is that it
+				// is what stow prints, and a phase reordering must not be able to
+				// change these bytes quietly.
+				fmt.Fprintf(e.log, "Unexpected action %s scheduled for %s; skipping clean-up\n", t.Action.name(), nodePath)
 			}
 			continue
 		}

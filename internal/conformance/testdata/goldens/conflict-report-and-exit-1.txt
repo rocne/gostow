@@ -1,0 +1,14 @@
+### exit 1
+### stdout
+### stderr
+WARNING! stowing pkg would cause conflicts:
+  * cannot stow ../stow/pkg/f over existing target f since neither a link nor a directory and --adopt not specified
+All operations aborted.
+### tree
+dir  home
+dir  stow
+dir  stow/pkg
+file stow/pkg/f 0644 11507a0e2f5e69d5dfa40a62a1bd7b6ee57e6bcd85c67c9b8431b36fff21c437
+dir  target
+file target/f 0644 cba06b5736faf67e54b07b561eae94395e774c517a7d910a54369e1263ccfbd4
+### end

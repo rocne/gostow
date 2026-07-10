@@ -3,16 +3,30 @@
 package conformance
 
 import (
+	"flag"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
-// AssertSameAsOracle materialises c into two separate sandboxes, runs real stow
-// on one and gostow on the other, normalises each sandbox's root out of the
-// streams, and requires Stdout, Stderr, ExitCode and Tree to match. Any
-// difference is a conformance bug — in gostow, or an unrecorded Parity Ledger
-// entry.
+// updateGoldens regenerates the layer-5 recordings from the live oracle. It is
+// declared only under the `oracle` build tag, so the hermetic suite cannot
+// rewrite the answers it is being graded against — the flag does not exist there.
+//
+// OraclePath asserts the binary reports exactly 2.4.1 before any of this runs, so
+// a golden can only ever be a recording of the pinned referent.
+var updateGoldens = flag.Bool("update-goldens", false,
+	"rewrite testdata/goldens from the pinned stow 2.4.1 oracle")
+
+// AssertSameAsOracle materialises c into two separate sandboxes, runs real stow on
+// one and gostow on the other, normalises each sandbox's root out of the streams,
+// and compares them. Any difference is a conformance bug — in gostow, or an
+// unrecorded Parity Ledger entry.
+//
+// It also records what the oracle did, so `go test ./...` can check the same
+// claim on a machine with no Perl. See AssertMatches for the three narrow
+// exemptions, and docs/TEST-PLAN.md §2 for why goldens and a live oracle are only
+// worth anything together.
 func AssertSameAsOracle(t *testing.T, c Case) {
 	t.Helper()
 
@@ -66,86 +80,23 @@ func AssertSameAsOracle(t *testing.T, c Case) {
 	gRun.Stderr = clean(gRun.Stderr, gostowRoot)
 	gRun.Tree = Normalize(gRun.Tree, gostowRoot)
 
-	switch {
-	case c.UsageOnStdout:
-		// stow dumps its whole help block on a usage error. The *diagnostic* is
-		// the contract — it goes to stderr and is compared byte for byte below —
-		// while the help block is prose, and gostow's prose is its own (SPEC §4.5).
-		//
-		// So the claim is not "the two agree", which would be false, but the
-		// stronger and still-checkable "each prints exactly the help it prints for
-		// --help". A fixture that silently stopped printing usage would fail here
-		// rather than pass by comparing nothing.
+	want := Golden{ExitCode: oRun.ExitCode, Stdout: oRun.Stdout, Stderr: oRun.Stderr, Tree: oRun.Tree}
+
+	// The oracle's own stdout is checked here rather than in AssertMatches: the
+	// golden layer has no oracle to ask, and asserting it against a recording
+	// would be circular.
+	if c.UsageOnStdout {
 		assertIsOwnHelp(t, c, "oracle", oracle, oracleRoot, oRun.Stdout)
-		assertIsOwnHelp(t, c, "gostow", gostow, gostowRoot, gRun.Stdout)
-	case oRun.Stdout != gRun.Stdout:
-		t.Errorf("stdout mismatch for %q\noracle:\n%s\ngostow:\n%s", c.Name, oRun.Stdout, gRun.Stdout)
 	}
-	switch {
-	case c.DiagnosticLinesOnly:
-		assertSameDiagnosticCount(t, c, oRun.Stderr, gRun.Stderr)
-	case oRun.Stderr != gRun.Stderr:
-		t.Errorf("stderr mismatch for %q\noracle:\n%s\ngostow:\n%s", c.Name, oRun.Stderr, gRun.Stderr)
-	}
-	switch {
-	case c.FatalExitDiverges:
-		if gRun.ExitCode != 2 {
-			t.Errorf("%q: gostow exit = %d, want 2 (fatal errors are pinned; ledger PL-07)", c.Name, gRun.ExitCode)
+
+	if *updateGoldens {
+		if err := SaveGolden(c.Name, want); err != nil {
+			t.Fatalf("write golden for %q: %v", c.Name, err)
 		}
-	case oRun.ExitCode != gRun.ExitCode:
-		t.Errorf("exit code mismatch for %q: oracle=%d gostow=%d", c.Name, oRun.ExitCode, gRun.ExitCode)
 	}
-	if oRun.Tree != gRun.Tree {
-		t.Errorf("tree mismatch for %q\noracle:\n%s\ngostow:\n%s", c.Name, oRun.Tree, gRun.Tree)
-	}
+
+	AssertMatches(t, c, want, gRun, gostow, gostowRoot)
 }
-
-// assertSameDiagnosticCount requires both binaries to have complained the same
-// number of times, and at least once. The wording is Perl's; the count is the
-// behaviour — Getopt::Long catches each callback's die and carries on, so two bad
-// patterns produce two diagnostics.
-func assertSameDiagnosticCount(t *testing.T, c Case, oracleErr, gostowErr string) {
-	t.Helper()
-
-	count := func(s string) int {
-		n := 0
-		for _, line := range strings.Split(s, "\n") {
-			if strings.TrimSpace(line) != "" {
-				n++
-			}
-		}
-		return n
-	}
-	o, g := count(oracleErr), count(gostowErr)
-	if o == 0 {
-		t.Fatalf("%q: the oracle printed no diagnostic; the check below would be vacuous", c.Name)
-	}
-	if o != g {
-		t.Errorf("%q: oracle printed %d diagnostic line(s), gostow printed %d\noracle:\n%s\ngostow:\n%s",
-			c.Name, o, g, oracleErr, gostowErr)
-	}
-}
-
-// assertIsOwnHelp requires that stdout is exactly what `bin --help` prints, and
-// that it is not empty.
-func assertIsOwnHelp(t *testing.T, c Case, who, bin, root, stdout string) {
-	t.Helper()
-
-	help := RunBinary(bin, []string{"--help"}, c.environ(root), filepath.Join(root, c.Cwd))
-	want := NormalizeIdentity(Normalize(help.Stdout, root))
-	if strings.TrimSpace(want) == "" {
-		t.Fatalf("%q: %s --help printed nothing; the check below would be vacuous", c.Name, who)
-	}
-	if stdout != want {
-		t.Errorf("%q: %s printed a usage error whose stdout is not its own --help\ngot:\n%s\nwant:\n%s",
-			c.Name, who, stdout, want)
-	}
-}
-
-// preArgv returns Pre with the sandbox root substituted. It lives here, beside
-// its only caller, because Pre is meaningful only when there is an oracle to
-// build the starting state with.
-func (c Case) preArgv(root string) []string { return expandAll(c.Pre, root) }
 
 func runIn(t *testing.T, bin string, c Case, root string) Run {
 	t.Helper()
@@ -158,3 +109,8 @@ func runIn(t *testing.T, bin string, c Case, root string) Run {
 	run.Tree = tree
 	return run
 }
+
+// preArgv returns Pre with the sandbox root substituted. It lives here, beside
+// its only caller, because Pre is meaningful only when there is an oracle to
+// build the starting state with.
+func (c Case) preArgv(root string) []string { return expandAll(c.Pre, root) }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -348,6 +349,166 @@ func TestActionString(t *testing.T) {
 	} {
 		if got := action.String(); got != want {
 			t.Errorf("Action(%d).String() = %q, want %q", int(action), got, want)
+		}
+	}
+}
+
+// mkfile writes a file, creating parents. Fixtures below are small enough that a
+// tree literal would obscure more than it saves.
+func mkfile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// doMv, isRealDir and Restow all read 0% in a hermetic coverage run, and the
+// reason is not that nothing exercises them: the differential and golden layers
+// drive gostow as a *subprocess*, and `go test -coverprofile` cannot see a
+// binary it did not link. The same blind spot as the test cache and the oracle.
+//
+// So exercise them in process. --adopt is the only path that ever files a move
+// task, and a move is the only operation here that destroys information.
+func TestAdoptMovesAConflictingFileIntoThePackage(t *testing.T) {
+	dir, target := t.TempDir(), t.TempDir()
+	mkfile(t, filepath.Join(dir, "pkg", "f"), "package version")
+	mkfile(t, filepath.Join(target, "f"), "target version")
+
+	if _, err := Stow(Options{Dir: dir, Target: target, Fold: true, Adopt: true}, "pkg"); err != nil {
+		t.Fatalf("Stow --adopt: %v", err)
+	}
+
+	// The target's content wins: stow moves the target file over the package's,
+	// then links to it. Adopting is how you take an existing dotfile into a
+	// package without retyping it, so the *target* is the thing preserved.
+	got, err := os.ReadFile(filepath.Join(dir, "pkg", "f"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "target version" {
+		t.Errorf("package file = %q, want the adopted target's content", got)
+	}
+
+	fi, err := os.Lstat(filepath.Join(target, "f"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode()&os.ModeSymlink == 0 {
+		t.Error("target/f is not a symlink after --adopt")
+	}
+	dest, err := os.Readlink(filepath.Join(target, "f"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join("..", filepath.Base(dir), "pkg", "f"); dest != want {
+		t.Errorf("target/f -> %q, want %q", dest, want)
+	}
+}
+
+// isRealDir distinguishes a directory from a symlink to one, which only matters
+// when folding is off and the walk must descend rather than link.
+func TestNoFoldingCreatesDirectoriesRatherThanFoldingThem(t *testing.T) {
+	dir, target := t.TempDir(), t.TempDir()
+	mkfile(t, filepath.Join(dir, "pkg", "sub", "a"), "a")
+
+	if _, err := Stow(Options{Dir: dir, Target: target, Fold: false}, "pkg"); err != nil {
+		t.Fatalf("Stow --no-folding: %v", err)
+	}
+
+	fi, err := os.Lstat(filepath.Join(target, "sub"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		t.Fatal("target/sub is a symlink; --no-folding must create a real directory")
+	}
+	if !fi.IsDir() {
+		t.Fatal("target/sub is not a directory")
+	}
+	if _, err := os.Readlink(filepath.Join(target, "sub", "a")); err != nil {
+		t.Errorf("target/sub/a is not a symlink: %v", err)
+	}
+}
+
+// Restow is three lines of sugar over Apply, and a library consumer's first call
+// should not be its first execution ever.
+func TestRestowUnstowsThenStows(t *testing.T) {
+	dir, target := t.TempDir(), t.TempDir()
+	mkfile(t, filepath.Join(dir, "pkg", "old"), "old")
+
+	opts := Options{Dir: dir, Target: target, Fold: true}
+	if _, err := Stow(opts, "pkg"); err != nil {
+		t.Fatalf("Stow: %v", err)
+	}
+
+	// Rename the package file. A restow must remove the now-dangling link and
+	// create the new one; a bare stow would leave the stale link behind.
+	if err := os.Rename(filepath.Join(dir, "pkg", "old"), filepath.Join(dir, "pkg", "new")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Restow(opts, "pkg"); err != nil {
+		t.Fatalf("Restow: %v", err)
+	}
+
+	if _, err := os.Lstat(filepath.Join(target, "old")); !os.IsNotExist(err) {
+		t.Errorf("target/old survived the restow (err = %v)", err)
+	}
+	if _, err := os.Readlink(filepath.Join(target, "new")); err != nil {
+		t.Errorf("target/new was not created: %v", err)
+	}
+}
+
+// Unstow is the same shape of sugar, and the only one whose failure would be
+// silent: an Unstow that planned a stow would look like a no-op on an empty tree.
+func TestUnstowRemovesWhatStowCreated(t *testing.T) {
+	dir, target := t.TempDir(), t.TempDir()
+	mkfile(t, filepath.Join(dir, "pkg", "f"), "x")
+
+	opts := Options{Dir: dir, Target: target, Fold: true}
+	if _, err := Stow(opts, "pkg"); err != nil {
+		t.Fatalf("Stow: %v", err)
+	}
+	if _, err := os.Readlink(filepath.Join(target, "f")); err != nil {
+		t.Fatalf("Stow created no link: %v", err)
+	}
+	if _, err := Unstow(opts, "pkg"); err != nil {
+		t.Fatalf("Unstow: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(target, "f")); !os.IsNotExist(err) {
+		t.Errorf("target/f survived the unstow (err = %v)", err)
+	}
+}
+
+// canon_path chdirs into the path and dies when it cannot. Reaching that in
+// process without root-only tricks: give it a path whose parent is a regular
+// file. ENOTDIR is unsearchable to everyone, including root, so this case can
+// never quietly skip the way a chmod-000 one would.
+//
+// The old canonPath swallowed every EvalSymlinks failure and returned the
+// absolute path, on the theory that a not-yet-existing path canonicalises to its
+// absolute form. It made `stow -n` report success on a target stow refuses.
+func TestCanonPathIsFatalWhenItCannotEnterThePath(t *testing.T) {
+	tmp := t.TempDir()
+	dir := t.TempDir()
+	mkfile(t, filepath.Join(dir, "pkg", "f"), "x")
+	mkfile(t, filepath.Join(tmp, "notadir"), "I am a file")
+
+	for _, target := range []string{
+		filepath.Join(tmp, "notadir", "under-a-file"),
+		filepath.Join(tmp, "does-not-exist"),
+	} {
+		_, err := Stow(Options{Dir: dir, Target: target, Fold: true, Simulate: true}, "pkg")
+
+		var fe *FatalError
+		if !errors.As(err, &fe) {
+			t.Errorf("Stow into %q returned %v, want a FatalError", target, err)
+			continue
+		}
+		if want := "canon_path: cannot chdir to " + target; !strings.HasPrefix(fe.Msg, want) {
+			t.Errorf("Stow into %q: message %q, want it to start %q", target, fe.Msg, want)
 		}
 	}
 }

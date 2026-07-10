@@ -1,0 +1,14 @@
+### exit 0
+### stdout
+### stderr
+WARNING: skipping protected directory sub
+### tree
+dir  home
+dir  stow
+dir  stow/pkg
+dir  stow/pkg/sub
+file stow/pkg/sub/a 0644 ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb
+dir  target
+dir  target/sub
+file target/sub/.nonstow 0644 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+### end

@@ -1,0 +1,15 @@
+### exit 0
+### stdout
+### stderr
+MKDIR: sub
+LINK: sub/a => ../../stow/pkg/sub/a
+### tree
+dir  home
+dir  stow
+dir  stow/pkg
+dir  stow/pkg/sub
+file stow/pkg/sub/a 0644 ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb
+dir  target
+dir  target/sub
+link target/sub/a -> ../../stow/pkg/sub/a
+### end

@@ -3,6 +3,7 @@ package conformance
 import (
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -14,9 +15,19 @@ import (
 // line-order, or case normalisation, so "RMDIR bin" stays unequal to
 // "RMDIR: bin" (ledger PL-05).
 func Normalize(s string, root string) string {
-	s = strings.ReplaceAll(s, root, "$SANDBOX")
+	// The longer form must go first. On darwin t.TempDir() hands back
+	// /var/folders/..., a symlink to /private/var/folders/..., and canon_path
+	// resolves it — real stow prints the /private form there too. Replacing the
+	// unresolved root first rewrites the tail of the resolved one and leaves
+	// "/private$SANDBOX" behind, which then fails to match a golden recorded on a
+	// machine where the two paths are the same.
+	roots := []string{root}
 	if resolved, err := filepath.EvalSymlinks(root); err == nil && resolved != root {
-		s = strings.ReplaceAll(s, resolved, "$SANDBOX")
+		roots = append(roots, resolved)
+	}
+	sort.Slice(roots, func(i, j int) bool { return len(roots[i]) > len(roots[j]) })
+	for _, r := range roots {
+		s = strings.ReplaceAll(s, r, "$SANDBOX")
 	}
 	return s
 }

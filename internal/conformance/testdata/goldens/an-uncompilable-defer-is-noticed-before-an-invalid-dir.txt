@@ -1,0 +1,46 @@
+### exit 1
+### stdout
+<IDENTITY>
+
+SYNOPSIS:
+
+    stow [OPTION ...] [-D|-S|-R] PACKAGE ... [-D|-S|-R] PACKAGE ...
+
+OPTIONS:
+
+    -d DIR, --dir=DIR     Set stow dir to DIR (default is current dir)
+    -t DIR, --target=DIR  Set target to DIR (default is parent of stow dir)
+
+    -S, --stow            Stow the package names that follow this option
+    -D, --delete          Unstow the package names that follow this option
+    -R, --restow          Restow (like stow -D followed by stow -S)
+
+    --ignore=REGEX        Ignore files ending in this Perl regex
+    --defer=REGEX         Don't stow files beginning with this Perl regex
+                          if the file is already stowed to another package
+    --override=REGEX      Force stowing files beginning with this Perl regex
+                          if the file is already stowed to another package
+    --adopt               (Use with care!)  Import existing files into stow package
+                          from target.  Please read docs before using.
+    --dotfiles            Enables special handling for dotfiles that are
+                          Stow packages that start with "dot-" and not "."
+    -p, --compat          Use legacy algorithm for unstowing
+
+    -n, --no, --simulate  Do not actually make any filesystem changes
+    -v, --verbose[=N]     Increase verbosity (levels are from 0 to 5;
+                            -v or --verbose adds 1; --verbose=N sets level)
+    -V, --version         Show stow version number
+    -h, --help            Show this help
+
+Report bugs to: bug-stow@gnu.org
+Stow home page: <http://www.gnu.org/software/stow/>
+General help using GNU software: <http://www.gnu.org/gethelp/>
+### stderr
+Unmatched [ in regex; marked by <-- HERE in m/\A([ <-- HERE )/ at /home/rocne/git/gostow/.oracle/bin/stow line 597, <DATA> line 23.
+### tree
+dir  home
+dir  stow
+dir  stow/pkg
+file stow/pkg/f 0644 2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881
+dir  target
+### end

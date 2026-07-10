@@ -43,9 +43,7 @@ func TestJoinPaths(t *testing.T) {
 	}
 }
 
-// Ported from stow 2.4.1's t/parent.t (5 assertions).
-
-// canonpath is a port of a Perl core routine and is exercised only indirectly by
+// perlCanonpath is a port of a Perl core routine and is exercised only indirectly by
 // join_paths. These cases pin the transformations join_paths depends on, and
 // the two places it differs from filepath.Clean: ".." survives, and a relative
 // path never gains a leading "./".
@@ -68,8 +66,8 @@ func TestCanonpath(t *testing.T) {
 		{"../a", "../a"},
 	}
 	for _, tt := range tests {
-		if got := canonpath(tt.in); got != tt.want {
-			t.Errorf("canonpath(%q) = %q, want %q", tt.in, got, tt.want)
+		if got := perlCanonpath(tt.in); got != tt.want {
+			t.Errorf("perlCanonpath(%q) = %q, want %q", tt.in, got, tt.want)
 		}
 	}
 }

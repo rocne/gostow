@@ -1,0 +1,9 @@
+### exit 0
+### stdout
+<IDENTITY>
+### stderr
+### tree
+dir  home
+dir  stow
+dir  target
+### end
