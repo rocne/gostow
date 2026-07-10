@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.0](https://github.com/rocne/gostow/compare/v0.1.1...v0.2.0) (2026-07-10)
+
+
+### Features
+
+* restructure --help, drop --gostow-help, import divergences into the man page ([#30](https://github.com/rocne/gostow/issues/30)) ([d6ada1a](https://github.com/rocne/gostow/commit/d6ada1a68365fb63ca0a2240b1f0f831bb75d087))
+* ship a man page and bash/zsh/fish completions ([#29](https://github.com/rocne/gostow/issues/29)) ([8f619aa](https://github.com/rocne/gostow/commit/8f619aa8041dd98fc0fdf71ff3523b38f7b2e71c))
+
+
+### Bug Fixes
+
+* move files with File::Copy::move semantics, not os.Rename ([#27](https://github.com/rocne/gostow/issues/27)) ([95ff186](https://github.com/rocne/gostow/commit/95ff186d50b194eafdd6dd1511af53952e608576))
+
 ## [0.1.1](https://github.com/rocne/gostow/compare/v0.1.0...v0.1.1) (2026-07-10)
 
 
