@@ -315,6 +315,129 @@ func TestCLIAgainstOracle(t *testing.T) {
 			Env:  []string{"STOW_DIR=" + SandboxToken + "/nosuchdir"},
 			Args: []string{"-v", "-t", "target", "pkg"},
 		},
+
+		// --- error paths, and the non-happy path above verbosity 0 ------------
+		//
+		// Everything above this comment is a clean stow, or a conflict at
+		// verbosity 0. That was the whole hole: four parity bugs lived here,
+		// found by an audit rather than by this suite. See docs/TEST-PLAN.md §3.4.
+		{
+			// Stow.pm's conflict() opens with debug(2, 0, "CONFLICT when
+			// ${action}ing $package: $message"). gostow only appended to a slice,
+			// so at -vv it dropped a line real stow prints. Invisible to the
+			// verbosity subsequence test, which compares gostow to itself.
+			Name:   "a conflict prints its CONFLICT line at -vv",
+			Stow:   Tree{"pkg/f": F("a")},
+			Target: Tree{"f": F("b")},
+			Args:   args("-vv", "pkg"),
+		},
+		{
+			Name:   "an unstow conflict prints its CONFLICT line at -vv",
+			Stow:   Tree{"pkg/f": F("a")},
+			Target: Tree{"f": F("b")},
+			Args:   args("-vv", "-D", "pkg"),
+		},
+		{
+			// The package subdirectory cannot be read, and the target has a real
+			// directory in its place, so stow must descend instead of folding.
+			// stow interpolates $! — "(Permission denied)"; gostow used to
+			// interpolate Go's error, which names the syscall and the absolute
+			// path. Exit is errno-derived (13), hence FatalExitDiverges.
+			Name:              "an unreadable package directory is fatal, with stow's errno wording",
+			Stow:              Tree{"pkg/sub/f": F("x"), "pkg/sub": D().Chmod(0o000)},
+			Target:            Tree{"sub": D()},
+			Args:              args("pkg"),
+			FatalExitDiverges: true,
+		},
+		{
+			// Stow::Util::canon_path chdirs and dies when it cannot. A target that
+			// exists but has no search bit is fatal before any planning — even
+			// under -n, where gostow used to report success and exit 0.
+			Name:              "a target directory without its search bit is fatal even under -n",
+			Stow:              Tree{"pkg/f": F("x")},
+			Target:            Tree{},
+			Root:              Tree{"target": D().Chmod(0o644)},
+			Args:              args("-n", "pkg"),
+			FatalExitDiverges: true,
+		},
+		{
+			// open(2) of a directory succeeds; the first read returns EISDIR.
+			// Perl's readline poisons the handle, close fails, and stow dies
+			// having stowed nothing. gostow ignored the read error, treated the
+			// rc file as empty, and stowed the package.
+			Name:              "a .stowrc that is a directory is fatal and stows nothing",
+			Stow:              Tree{"pkg/f": F("x")},
+			Root:              Tree{".stowrc": D()},
+			Args:              args("pkg"),
+			FatalExitDiverges: true,
+		},
+
+		// --- an uncompilable regex is a *parse* failure -----------------------
+		//
+		// bin/stow compiles --ignore/--defer/--override inside their Getopt::Long
+		// callbacks, so a bad pattern is diagnosed while parsing: message on
+		// stderr, usage on stdout, exit 1. gostow used to compile in newEngine,
+		// which is after .stowrc, after --dir validation, and after the "No
+		// packages" check — so with no packages the bad pattern went unnoticed.
+		//
+		// The diagnostic's text is Perl's regex engine quoting bin/stow's line
+		// numbers, so DiagnosticLinesOnly compares how many times each binary
+		// complained rather than what it said. See SPEC §10, PL-20.
+		{
+			Name:                "an uncompilable --ignore is a parse failure",
+			Stow:                Tree{"pkg/f": F("x")},
+			Args:                args("--ignore=(", "pkg"),
+			UsageOnStdout:       true,
+			DiagnosticLinesOnly: true,
+		},
+		{
+			Name:                "an uncompilable --ignore is noticed even with no packages",
+			Stow:                Tree{"pkg/f": F("x")},
+			Args:                args("--ignore=("),
+			UsageOnStdout:       true,
+			DiagnosticLinesOnly: true,
+		},
+		{
+			Name:                "an uncompilable --defer is noticed before an invalid --dir",
+			Stow:                Tree{"pkg/f": F("x")},
+			Args:                []string{"-d", "nosuchdir", "-t", "target", "--defer=[", "pkg"},
+			UsageOnStdout:       true,
+			DiagnosticLinesOnly: true,
+		},
+		{
+			// Getopt::Long catches each callback's die and keeps parsing, so two
+			// bad patterns yield two diagnostics. A gostow that stopped at the
+			// first would still exit 1, and would fail here.
+			Name:                "two uncompilable patterns produce two diagnostics",
+			Stow:                Tree{"pkg/f": F("x")},
+			Args:                args("--ignore=(", "--override=[", "pkg"),
+			UsageOnStdout:       true,
+			DiagnosticLinesOnly: true,
+		},
+		{
+			// The anchor is part of what stow compiles, so a pattern can be
+			// rejected for what the anchor makes of it. "*" is not a valid regex
+			// under either anchor.
+			Name:                "a pattern invalid once anchored is rejected",
+			Stow:                Tree{"pkg/f": F("x")},
+			Args:                args("--ignore=*", "pkg"),
+			UsageOnStdout:       true,
+			DiagnosticLinesOnly: true,
+		},
+		{
+			// "--ignore=" is a missing argument to Getopt::Long, not an empty
+			// pattern, so the validator must never see it. Audit item U3.
+			Name:          "an empty --ignore value is a missing argument",
+			Stow:          Tree{"pkg/f": F("x")},
+			Args:          args("--ignore=", "pkg"),
+			UsageOnStdout: true,
+		},
+		{
+			Name: "a valid --defer still reaches the engine",
+			Stow: Tree{"one/f": F("1"), "two/f": F("2")},
+			Pre:  []string{"-d", "stow", "-t", "target", "one"},
+			Args: args("-v", "--defer=f", "two"),
+		},
 	}
 
 	for _, c := range cases {

@@ -119,7 +119,7 @@ compare unequal to `RMDIR: bin` (ledger PL-05), or the suite is not testing pari
 Per SPEC §8.2, byte-exactness is a contract at verbosity **0–2**. Levels 3–5 are compared
 semantically (task sequence), not byte-wise — pending the PL-11 ruling.
 
-### 3.1 The oracle is invisible to `go test`'s cache
+### 3.2 The oracle is invisible to `go test`'s cache
 
 **Audited 2026-07-09.** `go test` may replay a stored PASS instead of running anything. It
 decides the stored result is still valid by hashing the test binary, its arguments, the
@@ -151,7 +151,7 @@ file: package `stow`'s oracle tests import `conformance`, and `internal/cli` imp
 so a non-test edge would be an import cycle. A package's test files are not compiled into it
 when another package imports it.
 
-### 3.2 A conformance test that skips is a vacuous pass
+### 3.3 A conformance test that skips is a vacuous pass
 
 `OraclePath`, `RequirePerl` and `OraclePerlLib` all `t.Fatal`. `OraclePath` used to `t.Skip`
 when it found no stow; on a machine without one, `go test -tags oracle ./...` then printed
@@ -163,6 +163,43 @@ used `chmod 000`, which does nothing to root, so under `sudo go test` it skipped
 the file with a **directory** makes it unreadable to everyone and reaches the same code path
 — and doing so immediately exposed a real gostow bug (SPEC §10, PL-10): `os.Open` succeeds
 on a directory, and the reader was swallowing the `EISDIR` from the first `Read`.
+
+### 3.4 Coverage of a code path is not coverage of its inputs
+
+**Audited 2026-07-10.** An external audit found six parity bugs. Every one of them lived in a
+region this suite had *executed* and never *examined*: error paths, and non-zero verbosity on
+a non-happy path. A dozen adversarial probes of the engine's core — pathological package
+names, multiple stow directories, `--adopt` conflicts in both directions, `--compat` with
+`--dotfiles`, stale-link restow — all matched the oracle exactly.
+
+The shape of the gap, twice over:
+
+- **Inputs, not lines.** `Stow::Util::parent` was executed by every test run, and never once
+  with a single-segment absolute path. The value decided where the symlink farm was aimed.
+- **Verbosity, not behaviour.** Every conflict fixture ran at verbosity 0, so `Stow.pm`'s
+  level-2 `CONFLICT when stowing …` line had no fixture at all. The verbosity subsequence
+  test cannot catch this: it compares gostow to *itself*, and a line missing at every level
+  is a subsequence of a line missing at every level.
+
+So a fixture must reach the errno-bearing paths, and it must reach them at `-vv`:
+
+| Fixture | What it pins |
+|---|---|
+| a conflict at `-vv`, stowing and unstowing | the level-2 `CONFLICT` line |
+| an unreadable package directory | `$!`'s wording, `(Permission denied)` and not Go's error |
+| a target without its search bit, under `-n` | `canon_path`'s fatal chdir, which `-n` does not excuse |
+| a `.stowrc` that is a directory | a swallowed `EISDIR`, and a package stowed that should not have been |
+
+`Case.Root` lays a tree at the sandbox root, which is the only way to write a `.stowrc` that
+is not a file. `Node.Mode` is a `*os.FileMode` for the same reason `Mode: 0o000` was a bug:
+zero is a real mode, and when it doubled as "unset" the fixture asking for an unreadable
+directory silently got a readable one. `RestorePermissions` runs before every snapshot and
+every teardown, because a directory at mode 000 is one neither `Snapshot` nor `os.RemoveAll`
+can enter.
+
+Each of the four fixtures above was confirmed to fail when its fix is reverted. Write the
+fixture, break the code, watch it go red — nothing else in this repository has earned the
+right to be trusted on inspection alone.
 
 ---
 

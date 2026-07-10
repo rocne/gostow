@@ -252,23 +252,6 @@ func (a *app) apply(p parsed, dir, target string) (int, error) {
 	return exitOK, nil
 }
 
-// gerund names an action inside stow's conflict banner. It lives here, not on
-// stow.Action, because the word is a fact about this message rather than about
-// the domain: the engine's Stringer is free to be renamed or reformatted, and
-// the parity-pinned bytes below must not follow it. Previously the banner was
-// built as "%sing" from Action.String(), which quietly made "stow" a load-bearing
-// spelling of an enum.
-func gerund(a stow.Action) string {
-	switch a {
-	case stow.ActionUnstow:
-		return "unstowing"
-	case stow.ActionRestow:
-		return "restowing"
-	default:
-		return "stowing"
-	}
-}
-
 // reportConflicts prints unstow conflicts before stow conflicts, packages sorted
 // within an action, and messages sorted within a package.
 func (a *app) reportConflicts(conflicts []stow.Conflict) {
@@ -291,7 +274,7 @@ func (a *app) reportConflicts(conflicts []stow.Conflict) {
 		}
 		sort.Strings(names)
 		for _, name := range names {
-			fmt.Fprintf(a.stderr, "WARNING! %s %s would cause conflicts:\n", gerund(action), name)
+			fmt.Fprintf(a.stderr, "WARNING! %s %s would cause conflicts:\n", stow.Gerund(action), name)
 			msgs := pkgs[name]
 			sort.Strings(msgs)
 			for _, m := range msgs {

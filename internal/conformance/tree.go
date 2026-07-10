@@ -18,14 +18,18 @@ const (
 	Symlink
 )
 
-// Node is one fixture entry. A zero Mode means "default": stow's own suite never
-// depends on a specific mode except when it deliberately makes something
-// unreadable, so the default keeps fixtures terse.
+// Node is one fixture entry. A nil Mode means "leave the default".
+//
+// Mode is a pointer because 0 is a real mode — no permissions at all — and the
+// mode a fixture most often needs to set. When it was a bare os.FileMode the
+// zero value doubled as "unset", so `Mode: 0o000` chmodded nothing; a fixture
+// asking for an unreadable directory silently got a readable one, and the test
+// built on it passed without testing anything.
 type Node struct {
 	Kind    NodeKind
 	Content string
 	Target  string
-	Mode    os.FileMode
+	Mode    *os.FileMode
 }
 
 // Tree is a fixture keyed by "/"-separated path relative to the root, with no
@@ -38,11 +42,19 @@ func D() Node { return Node{Kind: Dir} }
 
 func L(target string) Node { return Node{Kind: Symlink, Target: target} }
 
+// Chmod returns a copy of n whose mode is set explicitly. Symlink nodes ignore it.
+func (n Node) Chmod(mode os.FileMode) Node { n.Mode = &mode; return n }
+
 // Materialize writes the tree under root. Paths are created in sorted order so a
 // parent directory always precedes its children, and any missing parents are
 // created first. Symlinks are written verbatim — the Target is never resolved,
-// because stow's contract is the exact relative link it emits. Mode is applied
-// last so a chmod-000 file is still written before it becomes unreadable.
+// because stow's contract is the exact relative link it emits.
+//
+// Every mode is applied in a second pass, deepest path first. A single pass
+// cannot work: "pkg/sub" sorts before "pkg/sub/f", so a chmod-000 directory would
+// be sealed before the file inside it was written, and a fixture could not
+// describe an unreadable directory with contents. Chmodding deepest-first means
+// sealing a directory never blocks the chmod of something beneath it.
 func (t Tree) Materialize(root string) error {
 	paths := make([]string, 0, len(t))
 	for p := range t {
@@ -70,10 +82,15 @@ func (t Tree) Materialize(root string) error {
 				return err
 			}
 		}
-		if node.Mode != 0 && node.Kind != Symlink {
-			if err := os.Chmod(abs, node.Mode); err != nil {
-				return err
-			}
+	}
+
+	for i := len(paths) - 1; i >= 0; i-- {
+		node := t[paths[i]]
+		if node.Mode == nil || node.Kind == Symlink {
+			continue
+		}
+		if err := os.Chmod(filepath.Join(root, filepath.FromSlash(paths[i])), *node.Mode); err != nil {
+			return err
 		}
 	}
 	return nil

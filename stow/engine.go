@@ -153,6 +153,8 @@ func Apply(opts Options, reqs ...Request) (*Result, error) {
 		case ActionRestow:
 			toUnstow = append(toUnstow, r.Packages...)
 			toStow = append(toStow, r.Packages...)
+		default:
+			return nil, fatalf("bad action %d", int(r.Action))
 		}
 	}
 
@@ -208,26 +210,51 @@ func newEngine(opts Options) (*engine, error) {
 	e.debug(2, 0, "stow dir is %s", dir)
 	e.debug(2, 0, "stow dir path relative to target %s is %s", target, e.stowPath)
 
-	// --ignore is a suffix match, --defer and --override are prefix matches.
-	// Perl's \z and \A are Go's $ and ^ so long as no (?m) flag is set.
-	if e.ignoreRE, err = compileAll(opts.Ignore, "(%s)$"); err != nil {
+	// --ignore is a suffix match, --defer and --override are prefix matches. The
+	// CLI has already rejected an uncompilable pattern at parse time; a library
+	// consumer has not, so these still check.
+	if e.ignoreRE, err = compileAll("ignore", opts.Ignore, IgnoreAnchor); err != nil {
 		return nil, err
 	}
-	if e.deferRE, err = compileAll(opts.Defer, "^(%s)"); err != nil {
+	if e.deferRE, err = compileAll("defer", opts.Defer, PrefixAnchor); err != nil {
 		return nil, err
 	}
-	if e.overrideRE, err = compileAll(opts.Override, "^(%s)"); err != nil {
+	if e.overrideRE, err = compileAll("override", opts.Override, PrefixAnchor); err != nil {
 		return nil, err
 	}
 	return e, nil
 }
 
-func compileAll(sources []string, anchor string) ([]*regexp.Regexp, error) {
+// The anchors bin/stow wraps around its three regex options, inside the
+// Getopt::Long callbacks that compile them: qr{($regex)\z} for --ignore, and
+// qr{\A($regex)} for --defer and --override. Perl's \z and \A are Go's $ and ^
+// so long as no (?m) flag is set.
+//
+// They are exported because the anchor decides whether a pattern compiles at all,
+// and the CLI must reject a bad pattern at parse time, exactly where stow does.
+// Transcribing "(%s)$" a second time in internal/cli is how the parent bug was
+// born.
+const (
+	IgnoreAnchor = "(%s)$"
+	PrefixAnchor = "^(%s)"
+)
+
+// CompilePattern compiles one --ignore/--defer/--override pattern under its
+// anchor. flag is the option's name, for the diagnostic.
+func CompilePattern(flag, anchor, pattern string) (*regexp.Regexp, error) {
+	re, err := regexp.Compile(fmt.Sprintf(anchor, pattern))
+	if err != nil {
+		return nil, fatalf("Invalid --%s regex %q: %v", flag, pattern, err)
+	}
+	return re, nil
+}
+
+func compileAll(flag string, sources []string, anchor string) ([]*regexp.Regexp, error) {
 	var out []*regexp.Regexp
 	for _, s := range sources {
-		re, err := regexp.Compile(fmt.Sprintf(anchor, s))
+		re, err := CompilePattern(flag, anchor, s)
 		if err != nil {
-			return nil, fatalf("invalid regex %q: %v", s, err)
+			return nil, err
 		}
 		out = append(out, re)
 	}
@@ -237,23 +264,68 @@ func compileAll(sources []string, anchor string) ([]*regexp.Regexp, error) {
 // canonPath resolves symlinks and makes the path absolute, as Stow::Util's
 // canon_path does. stow_path is derived from the canonical forms, so a symlinked
 // target directory does not change the relative link destinations gostow writes.
+//
+// canon_path canonicalises by chdir'ing into the path and calling getcwd, and it
+// dies when the chdir fails. So it demands more than existence: a directory that
+// exists but lacks its search bit is fatal to stow, at every verbosity, before it
+// plans anything. Stat of "<path>/." is that chdir: resolving the trailing "."
+// needs the same search permission, and it needs it without needing read
+// permission, which opening the directory would.
+//
+// The old implementation returned the absolute path on *any* EvalSymlinks
+// failure, on the theory that a not-yet-existing path canonicalises to its
+// absolute form. Nothing ever asks it to: bin/stow validates that --dir and
+// --target are directories first, and so does gostow's CLI. What the fallback
+// actually did was swallow EACCES and let `stow -n` report success on a target
+// stow refuses to touch.
 func canonPath(p string) (string, error) {
 	abs, err := filepath.Abs(p)
 	if err != nil {
-		return "", err
+		return "", canonPathError(p)
 	}
 	resolved, err := filepath.EvalSymlinks(abs)
 	if err != nil {
-		return abs, nil //nolint:nilerr // a not-yet-existing path canonicalises to its absolute form
+		return "", canonPathError(p)
+	}
+	if _, err := os.Stat(resolved + string(os.PathSeparator) + "."); err != nil {
+		return "", canonPathError(p)
 	}
 	return resolved, nil
 }
 
+// canonPathError reproduces Stow::Util::canon_path's die, which names the path as
+// the caller wrote it and the directory it was standing in.
+func canonPathError(p string) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = ""
+	}
+	return fatalf("canon_path: cannot chdir to %s from %s", p, cwd)
+}
+
+// Gerund names an action the way stow's own diagnostics do: Stow.pm builds both
+// the level-2 CONFLICT line and bin/stow's conflict banner by interpolating
+// "${action}ing". It is a table rather than Action.String()+"ing" on purpose —
+// these bytes are parity-pinned, and the Stringer is documented as free to be
+// renamed.
+func Gerund(a Action) string {
+	switch a {
+	case ActionUnstow:
+		return "unstowing"
+	case ActionRestow:
+		return "restowing"
+	default:
+		return "stowing"
+	}
+}
+
 func (e *engine) conflict(action Action, pkg, format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	e.debug(2, 0, "CONFLICT when %s %s: %s", Gerund(action), pkg, msg)
 	e.conflicts = append(e.conflicts, Conflict{
 		Action:  action,
 		Package: pkg,
-		Message: fmt.Sprintf(format, args...),
+		Message: msg,
 	})
 }
 
@@ -307,7 +379,7 @@ func (e *engine) dirExists(p string) bool {
 func (e *engine) readdirSorted(p string) ([]string, error) {
 	entries, err := os.ReadDir(e.real(p))
 	if err != nil {
-		return nil, fatalf("cannot read directory: %s (%v)", p, err)
+		return nil, fatalf("cannot read directory: %s (%s)", p, errnoText(err))
 	}
 	names := make([]string, 0, len(entries))
 	for _, ent := range entries {
@@ -407,7 +479,7 @@ func (e *engine) stowNode(stowPath, pkg, pkgSubpath, targetSubpath string) error
 	if fi, err := os.Lstat(e.real(pkgPath)); err == nil && fi.Mode()&os.ModeSymlink != 0 {
 		dest, err := os.Readlink(e.real(pkgPath))
 		if err != nil {
-			return fatalf("Could not read link: %s (%v)", pkgPath, err)
+			return fatalf("Could not read link: %s (%s)", pkgPath, errnoText(err))
 		}
 		if strings.HasPrefix(dest, "/") {
 			e.conflict(ActionStow, pkg, "source is an absolute symlink %s => %s", pkgPath, dest)

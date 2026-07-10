@@ -6,7 +6,7 @@ included. Every claim on this page is enforced by a test that runs the real
 `stow` binary alongside gostow and compares stdout, stderr, exit code, and the
 resulting directory tree.
 
-There are three kinds of difference, and they are listed exhaustively below.
+There are four kinds of difference, and they are listed exhaustively below.
 
 ---
 
@@ -22,6 +22,7 @@ reproduce any of them, ever, with or without flags.
 | **Aborts an entire unstow because some unrelated symlink points at the text `0`.** Perl reads the string `"0"` as false, so a perfectly readable link is reported as unreadable. Exit code 2, nothing removed. | Reads the link and carries on. |
 | **Silently disables *all* ignore rules if `.stow-local-ignore` exists but cannot be read.** Your `README.md` gets stowed, and the unreadable ignore file stows itself. Exit code 0, no warning. | Fails loudly: `gostow: ERROR: cannot read ignore file ...`, exit 2. |
 | **Exits with whatever error number the last failed system call left behind** — 2 here, 255 there, depending on the machine. | Every fatal error exits 2. |
+| **Stows into a directory you never named when a `~username` fails to resolve.** `--target=~nosuchuser/tmp/x` in a `.stowrc` expands the unknown user to nothing, leaving `/tmp/x`, and stow builds the symlink farm there. Exit code 0. | Leaves the path alone, so it fails the ordinary check: `--target value '~nosuchuser/tmp/x' is not a valid directory`, exit 1, nothing written. |
 | Contains code paths that would crash or silently corrupt its own bookkeeping if they were reachable. They are not reachable. | Those paths are simply not written. |
 
 There are also two cosmetic differences that are not bugs being fixed:
@@ -41,6 +42,13 @@ There are also two cosmetic differences that are not bugs being fixed:
   diagnostic on stderr is still byte-exact, and so is the exit code. The test suite checks
   that every option GNU Stow documents, gostow documents too.
 
+- **A bad `--ignore`, `--defer` or `--override` pattern is reported in gostow's words.**
+  Real stow lets Perl's regex engine complain, and Perl names a line number inside
+  `/usr/bin/stow`. gostow says `Invalid --ignore regex "(": ...`. Everything a script can
+  observe is identical: the pattern is rejected while the command line is being parsed, so
+  it is caught even when you named no packages; the usage block goes to stdout; the exit
+  code is 1; and two bad patterns still produce two complaints.
+
 - **gostow colours its output when it is talking to a terminal.** Real stow never does.
   Nothing else in this document is additive; this is, because it cannot reach a script.
   Colour appears only when the stream is a terminal, and it only ever wraps text that was
@@ -48,9 +56,10 @@ There are also two cosmetic differences that are not bugs being fixed:
   to a file, pipe it anywhere, or set `NO_COLOR` to any non-empty value, and gostow emits
   not one escape character. `TERM=dumb` disables it too.
 
-  The slogan is *byte-compatible on a pipe, prettier on a TTY*, and the test suite proves
-  the first half: `gostow --help` on a terminal, with the colour stripped, is compared
-  byte-for-byte against `stow --help`.
+  The slogan is *byte-compatible on a pipe, prettier on a TTY*. The test suite proves the
+  first half directly: over every shape of line gostow prints, stripping the escapes from
+  a coloured line returns the uncoloured line exactly, and when colour is off the colouring
+  pass does not run at all.
 
 ---
 
@@ -87,6 +96,31 @@ Two more differences are outside stow's control, and outside gostow's:
   is a different program inside and prints different traces. Verbosity 0 through 2 —
   the levels any script would read — are byte-for-byte identical, and gostow's higher
   verbosities always still contain those lines, in order.
+
+---
+
+## 4. Things gostow cannot do
+
+One, and it is a property of the regex engine rather than a decision.
+
+**Perl regexes with lookaround or backreferences are rejected.** Go's regular expressions
+run in time linear in the input and cannot backtrack, which is what makes them immune to the
+catastrophic blow-ups a hostile pattern can provoke in Perl. The price is that
+`--ignore='x(?!y)'` and `--ignore='(k)\1'` compile in stow and not in gostow.
+
+gostow rejects the pattern rather than quietly matching something else:
+
+```
+$ gostow --ignore='x(?!y)' mypackage
+Invalid --ignore regex "x(?!y)": error parsing regexp: invalid or unsupported Perl syntax: `(?!`
+```
+
+…followed by the usage block, exit code 1 — the same as any other unusable pattern. Ordinary
+patterns are unaffected, including inline flags like `(?i)`, and every pattern in stow's
+built-in ignore list, in `.stow-local-ignore` and in `.stow-global-ignore` compiles unchanged.
+
+If a real `.stowrc` ever needs lookaround, the fix is a backtracking engine used for that
+pattern alone. Nobody has produced one yet.
 
 ---
 

@@ -22,9 +22,9 @@ func spec() []getopt.Option {
 		{Names: []string{"adopt"}},
 		{Names: []string{"no-folding"}},
 		{Names: []string{"dotfiles"}},
-		{Names: []string{"ignore"}, Arg: getopt.StringArg},
-		{Names: []string{"override"}, Arg: getopt.StringArg},
-		{Names: []string{"defer"}, Arg: getopt.StringArg},
+		{Names: []string{"ignore"}, Arg: getopt.StringArg, Validate: patternValidator("ignore", stow.IgnoreAnchor)},
+		{Names: []string{"override"}, Arg: getopt.StringArg, Validate: patternValidator("override", stow.PrefixAnchor)},
+		{Names: []string{"defer"}, Arg: getopt.StringArg, Validate: patternValidator("defer", stow.PrefixAnchor)},
 		{Names: []string{"D", "delete"}},
 		{Names: []string{"S", "stow"}},
 		{Names: []string{"R", "restow"}},
@@ -68,6 +68,24 @@ type parsed struct {
 	// leftover is what followed "--". stow discards it; --gostow-fix keeps it.
 	leftover []string
 	errors   []string
+}
+
+// patternValidator is the Getopt::Long callback bin/stow gives each of its three
+// regex options: it compiles the anchored pattern while parsing, so an
+// uncompilable one is a parse failure — diagnostic on stderr, usage block on
+// stdout, exit 1 — and not, as it once was in gostow, a fatal error raised much
+// later by the engine, after .stowrc, after --dir validation, and after the "No
+// packages to stow or unstow" check had already swallowed it.
+//
+// The diagnostic's *text* cannot match. Perl prints its own regex engine's
+// complaint ("Unmatched ( in regex; marked by <-- HERE ..."), naming a line in
+// bin/stow. gostow prints Go's. The timing, the streams and the exit code are the
+// reproducible behaviour, and those are matched exactly. See SPEC §10, PL-20.
+func patternValidator(flag, anchor string) func(string) error {
+	return func(value string) error {
+		_, err := stow.CompilePattern(flag, anchor, value)
+		return err
+	}
 }
 
 func parseArgs(args []string) parsed {

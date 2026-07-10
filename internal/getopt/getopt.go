@@ -51,6 +51,18 @@ type Option struct {
 	Names []string
 	Arg   ArgKind
 
+	// Validate is Getopt::Long's callback. bin/stow gives --ignore, --defer and
+	// --override one apiece, and each compiles its argument into a regex right
+	// there — so a bad pattern is a *parse* failure, diagnosed before .stowrc is
+	// read, before --dir is validated, and before "No packages to stow or unstow".
+	// Perl catches the callback's die, prints it, and carries on parsing, which is
+	// why two bad patterns produce two diagnostics in argv order. A validator that
+	// returns an error does exactly that: the diagnostic lands in Errors at the
+	// position the option appeared, and the option's value is discarded.
+	//
+	// Only called for an option that was given a value.
+	Validate func(value string) error
+
 	// NoAbbrev keeps this option out of prefix matching: it answers only to its
 	// exact name. gostow's own extensions set it, so that adding "--gostow-fix"
 	// cannot make "--g" resolve to something real stow would have rejected.
@@ -87,6 +99,19 @@ type Result struct {
 
 // OK reports whether parsing produced no diagnostics.
 func (r Result) OK() bool { return len(r.Errors) == 0 }
+
+// emit records a value-bearing event, first running the option's validator. A
+// rejected value becomes a diagnostic where it appeared and produces no event,
+// mirroring Getopt::Long: the callback dies before it can push the value.
+func (r *Result) emit(opt *Option, ev Event) {
+	if opt.Validate != nil {
+		if err := opt.Validate(ev.Value); err != nil {
+			r.Errors = append(r.Errors, err.Error())
+			return
+		}
+	}
+	r.Events = append(r.Events, ev)
+}
 
 // intLiteral is Getopt::Long's notion of an integer argument.
 var intLiteral = regexp.MustCompile(`^[-+]?[0-9]+$`)
@@ -201,14 +226,14 @@ func parseLong(t *table, r *Result, body string, args []string, i int) int {
 				r.Errors = append(r.Errors, fmt.Sprintf("Option %s requires an argument", key))
 				return 0
 			}
-			r.Events = append(r.Events, Event{Option: opt.Names[0], Value: value, HasValue: true})
+			r.emit(opt, Event{Option: opt.Names[0], Value: value, HasValue: true})
 			return 0
 		}
 		if i+1 >= len(args) {
 			r.Errors = append(r.Errors, fmt.Sprintf("Option %s requires an argument", key))
 			return 0
 		}
-		r.Events = append(r.Events, Event{Option: opt.Names[0], Value: args[i+1], HasValue: true})
+		r.emit(opt, Event{Option: opt.Names[0], Value: args[i+1], HasValue: true})
 		return 1
 
 	case OptionalIntArg:
@@ -224,11 +249,11 @@ func parseLong(t *table, r *Result, body string, args []string, i int) int {
 					fmt.Sprintf("Value %q invalid for option %s (integer number expected)", value, key))
 				return 0
 			}
-			r.Events = append(r.Events, Event{Option: opt.Names[0], Value: value, HasValue: true})
+			r.emit(opt, Event{Option: opt.Names[0], Value: value, HasValue: true})
 			return 0
 		}
 		if !hasValue && i+1 < len(args) && intLiteral.MatchString(args[i+1]) {
-			r.Events = append(r.Events, Event{Option: opt.Names[0], Value: args[i+1], HasValue: true})
+			r.emit(opt, Event{Option: opt.Names[0], Value: args[i+1], HasValue: true})
 			return 1
 		}
 		r.Events = append(r.Events, Event{Option: opt.Names[0]})
@@ -257,14 +282,14 @@ func parseBundle(t *table, r *Result, body string, args []string, i int) int {
 
 		case StringArg:
 			if rest != "" {
-				r.Events = append(r.Events, Event{Option: opt.Names[0], Value: rest, HasValue: true})
+				r.emit(opt, Event{Option: opt.Names[0], Value: rest, HasValue: true})
 				return 0
 			}
 			if i+1 >= len(args) {
 				r.Errors = append(r.Errors, fmt.Sprintf("Option %c requires an argument", c))
 				return 0
 			}
-			r.Events = append(r.Events, Event{Option: opt.Names[0], Value: args[i+1], HasValue: true})
+			r.emit(opt, Event{Option: opt.Names[0], Value: args[i+1], HasValue: true})
 			return 1
 
 		case OptionalIntArg:
@@ -272,11 +297,11 @@ func parseBundle(t *table, r *Result, body string, args []string, i int) int {
 			// is more bundled options. So "-v3" sets 3, "-vv" increments twice,
 			// and "-v=3" increments once and then chokes on '=' and '3'.
 			if intLiteral.MatchString(rest) {
-				r.Events = append(r.Events, Event{Option: opt.Names[0], Value: rest, HasValue: true})
+				r.emit(opt, Event{Option: opt.Names[0], Value: rest, HasValue: true})
 				return 0
 			}
 			if rest == "" && i+1 < len(args) && intLiteral.MatchString(args[i+1]) {
-				r.Events = append(r.Events, Event{Option: opt.Names[0], Value: args[i+1], HasValue: true})
+				r.emit(opt, Event{Option: opt.Names[0], Value: args[i+1], HasValue: true})
 				return 1
 			}
 			r.Events = append(r.Events, Event{Option: opt.Names[0]})
