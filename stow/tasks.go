@@ -361,7 +361,9 @@ func (e *engine) processTask(t *Task) error {
 			return fatalf("Could not remove link: %s (%s)", t.Path, errnoText(err))
 		}
 	case t.Action == TaskMove && t.Type == TypeFile:
-		if err := os.Rename(e.real(t.Path), e.real(t.Dest)); err != nil {
+		// moveFile, not os.Rename: Stow.pm uses File::Copy::move because the stow
+		// directory may sit on a different filesystem from the target. See move.go.
+		if err := moveFile(e.real(t.Path), e.real(t.Dest)); err != nil {
 			return fatalf("Could not move %s -> %s (%s)", t.Path, t.Dest, errnoText(err))
 		}
 	default:

@@ -222,7 +222,29 @@ Each of the four fixtures above was confirmed to fail when its fix is reverted. 
 fixture, break the code, watch it go red — nothing else in this repository has earned the
 right to be trusted on inspection alone.
 
-### 3.5 `go test -coverprofile` cannot see the binary the harness execs
+### 3.5 A boundary no fixture can express is a boundary nothing tests
+
+The differential harness materialises **one** sandbox root, so the stow directory and the
+target are always on the same filesystem. Nothing any fixture could say would change that —
+and `--adopt` is the one operation that behaves differently across a mount point.
+
+That is where PL-23 lived. `Stow.pm` calls `File::Copy::move` and explains itself in a
+comment; gostow called `os.Rename`, which fails `EXDEV`. The audit reached the right file,
+guessed that "parity of the *event* is likely", and moved on. It wasn't.
+
+The test builds the layout by hand: `t.TempDir()` for the stow directory and a directory
+under `/dev/shm` — a tmpfs on every ordinary Linux, and not the filesystem holding `/tmp` —
+for the target. **No root, no mounting.** `GOSTOW_TEST_XDEV_DIR` overrides it. The helper
+compares `st_dev` and calls `t.Fatal` when they match, because a test that means to cross a
+filesystem boundary and quietly does not would leave `os.Rename` succeeding, the entire
+fallback unexercised, and PASS on the terminal.
+
+The lesson generalises past this bug: **ask what a fixture format cannot say.** Here it was
+"these two paths are on different filesystems". Elsewhere it was "this directory has no
+permissions" (`Node.Mode` used zero to mean unset) and "this `.stowrc` is a directory"
+(`Case.Rc` was a string).
+
+### 3.6 `go test -coverprofile` cannot see the binary the harness execs
 
 The audit reported `doMv` at 0%, and read that as "the hermetic suite never executes
 `--adopt`'s move". Half right. L3 and L5 drive gostow as a **subprocess**, and the coverage
@@ -320,8 +342,7 @@ All three source-derived ledger items have been probed against the real binary. 
 - **stow's Perl internals.** We test observable behaviour at S1/S2 and pure functions at S3.
 - **Verbosity ≥3 byte output**, pending PL-11.
 - **Performance.** stow is not fast; being faster is free and unmeasured.
-- **`--adopt` across a filesystem boundary.** `os.Rename` and Perl's `rename` both fail with
-  `EXDEV`, and since 2026-07-10 the *message* is errno-derived on both sides — but no fixture
-  proves it, because one needs two mount points. Named here rather than assumed away.
+- **Ownership and timestamps on a copy.** `moveFile` carries the mtime because `File::Copy`
+  does; it does not carry ownership, and neither does stow, and no test asserts that.
 - **Perl-only regex constructs.** Lookaround and backreferences are rejected at parse time
   (PL-22), which is asserted; what they would have *matched* is not, and cannot be.
