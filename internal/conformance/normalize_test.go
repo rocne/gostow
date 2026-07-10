@@ -21,7 +21,14 @@ import (
 // whose target merely lives elsewhere would pass under either ordering. Built by
 // hand here so every platform runs it, not only the CI runner nobody develops on.
 func TestNormalizeReplacesTheLongerRootFirst(t *testing.T) {
-	base := t.TempDir()
+	// Resolve the temp dir before building anything under it. On darwin it is
+	// itself reached through /var -> /private/var, and EvalSymlinks resolves the
+	// whole chain, so an unresolved base would make the fixture's own "real" path
+	// no longer be what EvalSymlinks returns for its link.
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	link := filepath.Join(base, "var", "sandbox")
 	// "/private" + link, exactly as darwin does it: the real path ends with the
@@ -39,6 +46,10 @@ func TestNormalizeReplacesTheLongerRootFirst(t *testing.T) {
 	}
 	if err := os.Symlink(real, link); err != nil {
 		t.Fatal(err)
+	}
+	// The fixture only tests what it claims if EvalSymlinks really returns `real`.
+	if resolved, err := filepath.EvalSymlinks(link); err != nil || resolved != real {
+		t.Fatalf("fixture is wrong: EvalSymlinks(%q) = %q, %v; want %q", link, resolved, err, real)
 	}
 
 	// The engine resolves symlinks, so it prints `real`; the harness knows `link`.
