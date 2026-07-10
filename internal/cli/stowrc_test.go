@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -94,5 +95,39 @@ func TestStowrcReadsALineLongerThanAScannerBuffer(t *testing.T) {
 	if len(tokens) != 1 || tokens[0] != "--ignore="+long {
 		t.Errorf("got %d token(s), first of length %d; want one token of length %d",
 			len(tokens), len(tokens[0]), len("--ignore=")+len(long))
+	}
+}
+
+// The RE2 divergence, pinned (ledger PL-22, docs/DIVERGENCES.md §4).
+//
+// Perl accepts lookaround and backreferences; RE2 accepts neither. Real stow runs
+// with these patterns. gostow must reject them at parse time with a diagnostic
+// naming the flag, rather than compile something subtly different and silently
+// mismatch — and it must keep accepting everything RE2 does support, including
+// the inline flags that look like the unsupported syntax.
+func TestPerlOnlyRegexConstructsAreRejectedAtParseTime(t *testing.T) {
+	rejected := []string{
+		`x(?!y)`,  // negative lookahead
+		`x(?=y)`,  // positive lookahead
+		`(?<=x)y`, // lookbehind
+		`(k)\1`,   // backreference
+	}
+	for _, pattern := range rejected {
+		p := parseArgs([]string{"--ignore=" + pattern, "pkg"})
+		if len(p.errors) != 1 {
+			t.Errorf("--ignore=%q produced %d diagnostics, want 1", pattern, len(p.errors))
+			continue
+		}
+		// The diagnostic quotes the pattern with %q, so a backslash arrives escaped.
+		if !strings.Contains(p.errors[0], "--ignore") || !strings.Contains(p.errors[0], fmt.Sprintf("%q", pattern)) {
+			t.Errorf("--ignore=%q diagnostic %q names neither the flag nor the pattern", pattern, p.errors[0])
+		}
+	}
+
+	accepted := []string{`(?i)keep`, `\.log`, `a|b`, `x*`, `^$`, `0`}
+	for _, pattern := range accepted {
+		if p := parseArgs([]string{"--ignore=" + pattern, "pkg"}); len(p.errors) != 0 {
+			t.Errorf("--ignore=%q was rejected: %v", pattern, p.errors)
+		}
 	}
 }

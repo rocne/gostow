@@ -6,7 +6,7 @@ included. Every claim on this page is enforced by a test that runs the real
 `stow` binary alongside gostow and compares stdout, stderr, exit code, and the
 resulting directory tree.
 
-There are three kinds of difference, and they are listed exhaustively below.
+There are four kinds of difference, and they are listed exhaustively below.
 
 ---
 
@@ -96,6 +96,31 @@ Two more differences are outside stow's control, and outside gostow's:
   is a different program inside and prints different traces. Verbosity 0 through 2 —
   the levels any script would read — are byte-for-byte identical, and gostow's higher
   verbosities always still contain those lines, in order.
+
+---
+
+## 4. Things gostow cannot do
+
+One, and it is a property of the regex engine rather than a decision.
+
+**Perl regexes with lookaround or backreferences are rejected.** Go's regular expressions
+run in time linear in the input and cannot backtrack, which is what makes them immune to the
+catastrophic blow-ups a hostile pattern can provoke in Perl. The price is that
+`--ignore='x(?!y)'` and `--ignore='(k)\1'` compile in stow and not in gostow.
+
+gostow rejects the pattern rather than quietly matching something else:
+
+```
+$ gostow --ignore='x(?!y)' mypackage
+Invalid --ignore regex "x(?!y)": error parsing regexp: invalid or unsupported Perl syntax: `(?!`
+```
+
+…followed by the usage block, exit code 1 — the same as any other unusable pattern. Ordinary
+patterns are unaffected, including inline flags like `(?i)`, and every pattern in stow's
+built-in ignore list, in `.stow-local-ignore` and in `.stow-global-ignore` compiles unchanged.
+
+If a real `.stowrc` ever needs lookaround, the fix is a backtracking engine used for that
+pattern alone. Nobody has produced one yet.
 
 ---
 

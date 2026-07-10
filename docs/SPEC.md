@@ -773,6 +773,8 @@ table is a deliverable in its own right.
 | PL-20 | An uncompilable `--ignore`/`--defer`/`--override` pattern is diagnosed by **Perl's own regex engine**, inside the `Getopt::Long` callback that compiles it (`bin/stow:582-597`): `Unmatched ( in regex; marked by <-- HERE in m/( <-- HERE ()\z/ at /usr/bin/stow line 585, <DATA> line 23.` The text names bin/stow's line numbers and varies with the Perl release. | **probed (2026-07-10): confirmed** | 2 | **RULED: replicate the behaviour, substitute the text.** The *timing* is the behaviour and is fully reproducible: the compile happens while parsing, so a bad pattern is a parse failure — diagnostic on stderr, usage block on stdout, exit **1** — before `.stowrc` is read, before `--dir` is validated, and before the `No packages to stow or unstow` check. Getopt::Long catches each callback's `die`, prints it, and keeps parsing, so *n* bad patterns produce *n* diagnostics in argv order. gostow reproduces all of that and prints its own diagnostic (`Invalid --ignore regex "(": ...`), exactly as PL-19 substitutes for Getopt::Long's own wording. Note the anchor is part of what is compiled — `--ignore=*` is rejected because `(*)$` is invalid. gostow used to compile in `newEngine`, so with no packages named the bad pattern was never noticed at all, and every failure exited 2 with no usage block. |
 | PL-21 | `~nosuchuser` in a `.stowrc` path expands to the **empty string**. `(getpwnam($1))[7]` is `undef` for an unknown user; Perl interpolates it as `""` and warns `Use of uninitialized value in substitution iterator`. So `--target=~nosuchuser/tmp/x` silently targets `/tmp/x`, stows into it, and exits 0. | **probed (2026-07-10): confirmed** | 3 | **RULED: do not replicate.** Reproduced exactly: with a real absolute path after the bad tilde, stow stows into it and exits 0 while the warning scrolls past. Writing a symlink farm into a directory the user never named, because a username failed to resolve, is an uninitialized value escaping into a filesystem operation — a defect, not behaviour, and squarely inside the mandate's exemption for stow's bugs. gostow leaves the token unexpanded, which fails the existing `--target value '~nosuchuser/tmp/x' is not a valid directory` check: usage on stdout, exit 1, nothing written. Report upstream. |
 
+| PL-22 | Perl regexes accept lookaround and backreferences; RE2 does not. `stow --ignore='x(?!y)' pkg` and `stow --ignore='(k)\1' pkg` both run; gostow rejects the pattern. | **probed (2026-07-10): confirmed** | 2 | **RULED: reject at parse time, and say so.** This is §11.5's ruling reaching the three CLI flags, which it never explicitly named. gostow prints `Invalid --ignore regex "x(?!y)": ... invalid or unsupported Perl syntax: `(?!`` and exits 1 with the usage block — the same shape as any other uncompilable pattern (PL-20), so a script sees a rejected option rather than a silent mismatch. Inline flags such as `(?i)` work in both. The escape hatch in §11.5 (a vendored backtracking engine, for the failing pattern only) stays available and unbuilt: no real-world `.stowrc` has been observed to need it. Recorded in `docs/DIVERGENCES.md` §4. |
+
 **Upstream bug reports to file:** PL-01, PL-03, PL-04, PL-05, PL-06, PL-08, PL-09, PL-10, **PL-18** (highest severity: a `$HOME` containing a regex metacharacter makes stow unusable), PL-21.
 
 ---
@@ -840,6 +842,11 @@ no dependency). All built-in defaults are RE2-compatible. If a pattern fails to 
 fail cleanly at parse time with a clear message rather than silently mismatching. If a real
 user pattern ever needs lookaround or backreferences, fall back to a vendored backtracking
 engine **for that pattern only**, keeping the common path fast.
+
+This ruling covers the three CLI flags as well as the ignore files: `--ignore`, `--defer` and
+`--override` are compiled inside `bin/stow`'s `Getopt::Long` callbacks, so "parse time" is
+literally where stow compiles them too. See PL-20 for the timing and PL-22 for the confirmed
+set of Perl constructs RE2 rejects.
 
 See PL-15 for the `$`-vs-newline divergence.
 
