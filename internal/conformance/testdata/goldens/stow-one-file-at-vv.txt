@@ -1,0 +1,20 @@
+### exit 0
+### stdout
+### stderr
+stow dir is $SANDBOX/stow
+stow dir path relative to target $SANDBOX/target is ../stow
+Planning stow of: pkg ...
+Planning stow of package pkg...
+    level of f is 0
+LINK: f => ../stow/pkg/f
+Planning stow of package pkg... done
+Processing tasks...
+Processing tasks... done
+### tree
+dir  home
+dir  stow
+dir  stow/pkg
+file stow/pkg/f 0644 2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881
+dir  target
+link target/f -> ../stow/pkg/f
+### end

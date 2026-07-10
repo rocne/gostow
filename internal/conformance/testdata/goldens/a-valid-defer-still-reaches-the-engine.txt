@@ -1,0 +1,13 @@
+### exit 0
+### stdout
+### stderr
+### tree
+dir  home
+dir  stow
+dir  stow/one
+file stow/one/f 0644 6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b
+dir  stow/two
+file stow/two/f 0644 d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35
+dir  target
+link target/f -> ../stow/one/f
+### end

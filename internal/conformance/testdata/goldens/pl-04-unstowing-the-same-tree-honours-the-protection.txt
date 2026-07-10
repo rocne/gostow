@@ -1,0 +1,15 @@
+### exit 0
+### stdout
+### stderr
+WARNING: skipping marked Stow directory .foo
+### tree
+dir  home
+dir  stow
+dir  stow/pkg
+dir  stow/pkg/dot-foo
+file stow/pkg/dot-foo/bar 0644 2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881
+dir  target
+dir  target/.foo
+file target/.foo/.stow 0644 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+link target/.foo/bar -> ../../stow/pkg/dot-foo/bar
+### end

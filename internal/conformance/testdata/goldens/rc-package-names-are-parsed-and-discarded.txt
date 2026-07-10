@@ -1,0 +1,13 @@
+### exit 0
+### stdout
+### stderr
+LINK: f => ../stow/pkg/f
+### tree
+file .stowrc 0644 92d7f6a9bb855be397f2b2e0d256f33d5665ebdb28ed3b151c7072041c387504
+dir  home
+dir  stow
+dir  stow/pkg
+file stow/pkg/f 0644 2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881
+dir  target
+link target/f -> ../stow/pkg/f
+### end

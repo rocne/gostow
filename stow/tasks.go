@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/rocne/gostow/internal/stowpath"
 )
 
 // TaskAction is what a planned task does to the filesystem.
@@ -14,6 +16,20 @@ const (
 	TaskRemove
 	TaskMove
 )
+
+// name is the word Stow.pm stores in $task->{action} and interpolates into
+// cleanup_invalid_links' warning. Unlike Action.String it *is* parity-pinned, so
+// it is unexported and spelled to match.
+func (a TaskAction) name() string {
+	switch a {
+	case TaskRemove:
+		return "remove"
+	case TaskMove:
+		return "move"
+	default:
+		return "create"
+	}
+}
 
 // TaskType is what a planned task acts upon.
 type TaskType int
@@ -130,7 +146,7 @@ func (p *planner) dirTaskAction(path string) (TaskAction, bool) {
 // already conceptually gone, even though the disk still shows it.
 func (p *planner) parentLinkScheduledForRemoval(targetPath string) bool {
 	prefix := ""
-	for _, part := range reSlashRun.Split(targetPath, -1) {
+	for _, part := range stowpath.Segments(targetPath) {
 		if part == "" {
 			continue
 		}

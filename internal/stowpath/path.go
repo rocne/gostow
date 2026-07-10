@@ -30,14 +30,21 @@ var reSlashRun = regexp.MustCompile(`/+`)
 // with the last segment. Callers that need a directory substitute "." for "",
 // exactly as bin/stow's `|| '.'` does.
 func Parent(paths ...string) string {
-	path := strings.Join(paths, "/")
-	elts := reSlashRun.Split(path, -1)
-	// Perl's split discards trailing empty fields.
-	for len(elts) > 0 && elts[len(elts)-1] == "" {
-		elts = elts[:len(elts)-1]
-	}
+	elts := Segments(strings.Join(paths, "/"))
 	if len(elts) == 0 {
 		return ""
 	}
 	return strings.Join(elts[:len(elts)-1], "/")
+}
+
+// Segments splits path on runs of slashes, exactly as Perl's `split m{/+}` does:
+// a leading slash produces a leading empty field, and trailing empty fields are
+// discarded. Both Parent and the engine's plan walk need it, and they needed it
+// badly enough that each had compiled its own `/+`.
+func Segments(path string) []string {
+	elts := reSlashRun.Split(path, -1)
+	for len(elts) > 0 && elts[len(elts)-1] == "" {
+		elts = elts[:len(elts)-1]
+	}
+	return elts
 }

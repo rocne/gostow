@@ -1,0 +1,19 @@
+### exit 0
+### stdout
+### stderr
+stow dir is $SANDBOX/stow
+stow dir path relative to target $SANDBOX/target is ../stow
+Planning unstow of: pkg ...
+Planning unstow of package pkg...
+--- removing invalid link into a stow directory: ../stow/pkg/f
+UNLINK: f
+Planning unstow of package pkg... done
+Processing tasks...
+Processing tasks... done
+### tree
+dir  home
+dir  stow
+dir  stow/pkg
+file stow/pkg/g 0644 cd0aa9856147b6c5b4ff2b7dfee5da20aa38253099ef1b4a64aced233c9afe29
+dir  target
+### end

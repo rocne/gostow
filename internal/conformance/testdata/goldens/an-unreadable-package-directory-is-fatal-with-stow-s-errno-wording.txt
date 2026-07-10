@@ -1,0 +1,13 @@
+### exit 13
+### stdout
+### stderr
+stow: ERROR: cannot read directory: ../stow/pkg/sub (Permission denied)
+### tree
+dir  home
+dir  stow
+dir  stow/pkg
+dir  stow/pkg/sub
+file stow/pkg/sub/f 0644 2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881
+dir  target
+dir  target/sub
+### end

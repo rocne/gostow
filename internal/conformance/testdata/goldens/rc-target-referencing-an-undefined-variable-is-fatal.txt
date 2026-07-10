@@ -1,0 +1,12 @@
+### exit 255
+### stdout
+### stderr
+--target option references undefined environment variable $GOSTOW_UNDEFINED; aborting!
+### tree
+file .stowrc 0644 81735af40309cf5108d1000bc50581b3c730d72e5b8181bf3f0bda1ba5da23ac
+dir  home
+dir  stow
+dir  stow/pkg
+file stow/pkg/f 0644 2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881
+dir  target
+### end

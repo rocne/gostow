@@ -1,0 +1,11 @@
+### exit 2
+### stdout
+### stderr
+stow: ERROR: The stow directory ../stow does not contain package nope
+### tree
+dir  home
+dir  stow
+dir  stow/pkg
+file stow/pkg/f 0644 2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881
+dir  target
+### end

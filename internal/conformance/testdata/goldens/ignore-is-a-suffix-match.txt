@@ -1,0 +1,13 @@
+### exit 0
+### stdout
+### stderr
+LINK: keep => ../stow/pkg/keep
+### tree
+dir  home
+dir  stow
+dir  stow/pkg
+file stow/pkg/drop.log 0644 18ac3e7343f016890c510e93f935261169d9e3f565436429830faf0934f4f8e4
+file stow/pkg/keep 0644 8254c329a92850f6d539dd376f4816ee2764517da5e0235514af433164480d7a
+dir  target
+link target/keep -> ../stow/pkg/keep
+### end

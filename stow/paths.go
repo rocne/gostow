@@ -15,14 +15,19 @@ var (
 	reDotSegment    = regexp.MustCompile(`(?:/\.)+(?:/|$)`)
 	reLeadingDotDir = regexp.MustCompile(`^(?:\./)+`)
 	reRootParents   = regexp.MustCompile(`^/(?:\.\./)+`)
-	reSlashRun      = regexp.MustCompile(`/+`)
 )
 
-// canonpath is a port of Perl's File::Spec::Unix::canonpath, which join_paths
+// perlCanonpath is a port of Perl's File::Spec::Unix::canonpath, which join_paths
 // leans on three separate times. It is not filepath.Clean: Clean resolves ".."
-// against the preceding segment, canonpath leaves "a/../b" alone. join_paths
+// against the preceding segment, perlCanonpath leaves "a/../b" alone. join_paths
 // strips ".." itself, afterwards, with different rules (see removeParentRefs).
-func canonpath(path string) string {
+//
+// The "perl" prefix keeps it distinguishable from canonPath in engine.go, which
+// ports Stow::Util::canon_path — a different routine that resolves symlinks and
+// dies on an unenterable directory. Upstream's two names differ only in an
+// underscore; a difference of case alone is invisible in speech and in a review
+// diff. They must never be unified: this one must leave "a/../b" alone.
+func perlCanonpath(path string) string {
 	if path == "" {
 		return ""
 	}
@@ -111,7 +116,7 @@ func joinPaths(paths ...string) string {
 		if part == "" {
 			continue
 		}
-		part = canonpath(part)
+		part = perlCanonpath(part)
 		if strings.HasPrefix(part, "/") {
 			result = part // absolute: ignore all previous parts
 			continue
@@ -121,7 +126,7 @@ func joinPaths(paths ...string) string {
 		}
 		result += part
 	}
-	result = canonpath(result)
+	result = perlCanonpath(result)
 	result = removeParentRefs(result)
-	return canonpath(result)
+	return perlCanonpath(result)
 }

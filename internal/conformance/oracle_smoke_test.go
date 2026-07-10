@@ -4,9 +4,10 @@ package conformance
 
 import "testing"
 
-// Proves the harness can drive real stow end to end. gostow has no engine yet,
-// so this deliberately does not compare the two — it only asserts the oracle
-// plans a trivial one-file stow cleanly (dry run, exit 0).
+// Proves the harness can drive real stow end to end, independently of gostow.
+// The comparison lives in TestCLIAgainstOracle; this asserts only that the oracle
+// itself plans a trivial one-file stow cleanly (dry run, exit 0), so a broken
+// oracle installation fails here rather than as 60 confusing diffs.
 func TestOracleSmoke(t *testing.T) {
 	bin := OraclePath(t)
 	c := Case{
