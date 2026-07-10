@@ -163,7 +163,8 @@ GNU Stow ships no completions at all, so nothing is being overridden.
 ## What's different
 
 Almost nothing, on purpose. The exhaustive list is in **[docs/DIVERGENCES.md](docs/DIVERGENCES.md)**,
-and `gostow --gostow-help` summarises it at the terminal. In brief:
+which `man gostow` reproduces verbatim (the man page imports that file, so the two cannot
+drift). In brief:
 
 - **gostow does not reproduce stow's crashes.** Real stow dies before doing any work if your
   home directory contains a `(` or a `[`; it aborts an entire unstow if some unrelated

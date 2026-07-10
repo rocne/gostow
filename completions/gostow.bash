@@ -60,7 +60,7 @@ _gostow() {
            --adopt --no-folding -p --compat
            -n --no --simulate -v --verbose
            -V --version -h --help
-           --gostow-fix --gostow-help'
+           --gostow-fix'
 
     case "$prev" in
         -d | --dir | -t | --target)

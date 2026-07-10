@@ -160,9 +160,34 @@ func assertSameFlags(t *testing.T, what string, want, got []string) {
 	}
 }
 
+// roffSection returns the body of the named ".SH" section, exclusive of the
+// heading line and stopping at the next ".SH".
+func roffSection(src, name string) string {
+	var out []string
+	in := false
+	for _, line := range strings.Split(src, "\n") {
+		if strings.HasPrefix(line, ".SH ") {
+			in = strings.TrimSpace(strings.TrimPrefix(line, ".SH ")) == name
+			continue
+		}
+		if in {
+			out = append(out, line)
+		}
+	}
+	return strings.Join(out, "\n")
+}
+
+// Only the OPTIONS section is required to name exactly gostow's options. The rest
+// of the page — the SYNOPSIS, the generated DIVERGENCES section — legitimately
+// names other tokens: the DIVERGENCES import shows `complete -F _gostow stow` and
+// talks about the `--gostow-` prefix, none of which are gostow options.
 func TestManPageDocumentsExactlyTheOptionsGostowAccepts(t *testing.T) {
 	src := repoFile(t, "man/gostow.8")
-	assertSameFlags(t, "man/gostow.8", specFlags(t), flagsIn(unroff(src)))
+	options := roffSection(src, "OPTIONS")
+	if strings.TrimSpace(options) == "" {
+		t.Fatal("man/gostow.8 has no OPTIONS section; the slice is broken and this test would be vacuous")
+	}
+	assertSameFlags(t, "man/gostow.8 OPTIONS", specFlags(t), flagsIn(unroff(options)))
 }
 
 // stripComments removes whole-line comments so a completion script's own prose

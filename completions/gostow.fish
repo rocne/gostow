@@ -71,7 +71,6 @@ complete -c gostow -s v -l verbose -a '0 1 2 3 4 5' --description 'Increase verb
 complete -c gostow -s V -l version --description 'Print the version and exit'
 complete -c gostow -s h -l help --description 'Print help and exit'
 
-complete -c gostow -l gostow-fix --description "Fix GNU Stow's defects instead of matching them"
-complete -c gostow -l gostow-help --description "Explain gostow's extensions and exit"
+complete -c gostow -l gostow-fix --description "Fix GNU Stow's defects; see man gostow for divergences"
 
 complete -c gostow -a '(__gostow_packages)' --description Package

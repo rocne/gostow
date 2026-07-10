@@ -49,11 +49,11 @@ and it keeps the number of links small. When a second package needs to install
 into that same directory, the fold is undone automatically: the link is replaced
 by a real directory and both packages' contents are linked inside it.
 .PP
-Aside from colour on a terminal,
+Aside from color on a terminal,
 .B gostow
 is byte-for-byte compatible with GNU Stow: same options, same output, same exit
 codes, same links. See
-.B COMPATIBILITY
+.B DIVERGENCES
 below.
 .
 .SH TERMINOLOGY
@@ -137,8 +137,21 @@ Install files whose path begins with a match for
 .IR REGEX
 even if another package installed them, replacing that package's links. May be
 given more than once.
+.PP
+Each
+.I REGEX
+is an RE2 regular expression (Go's
+.I regexp
+syntax), not a Perl one. Lookaround and backreferences are rejected at parse
+time rather than silently matching something else; inline flags such as
+.RB \(lq (?i) \(rq
+work. GNU Stow's own ignore patterns, and every pattern in a
+.I .stow\-local\-ignore
+or
+.IR .stow\-global\-ignore ,
+compile unchanged.
 .
-.SS Behaviour
+.SS Behavior
 .TP
 .B \-\-adopt
 When a target file already exists as a plain file, and so belongs to no package,
@@ -177,21 +190,18 @@ Print the version and exit.
 Print a summary of the options and exit.
 .
 .SS gostow extensions
-These options do not exist in GNU Stow. Each is prefixed
+This option does not exist in GNU Stow. It is prefixed
 .RB \(lq gostow\- \(rq
-and none may be abbreviated, so no command line that GNU Stow accepts is parsed
+and may not be abbreviated, so no command line that GNU Stow accepts is parsed
 differently here.
 .TP
 .B \-\-gostow\-fix
 Correct GNU Stow's known defects instead of reproducing them. Without this flag
 .B gostow
 reproduces them faithfully, because a drop\-in replacement that quietly behaves
-better is still behaving differently. See
-.I docs/DIVERGENCES.md
-for the exact list.
-.TP
-.B \-\-gostow\-help
-Describe the extensions and divergences, and exit.
+better is still behaving differently. The
+.B DIVERGENCES
+section below is the exact list.
 .
 .SH EXIT STATUS
 .TP
@@ -234,7 +244,7 @@ and
 .IR ~/.stow\-global\-ignore .
 .TP
 .B NO_COLOR
-If set to any value, suppress colour. Colour is emitted only when standard
+If set to any value, suppress color. Color is emitted only when standard
 output is a terminal, so a pipe or a redirect is unaffected either way.
 .
 .SH FILES
@@ -336,43 +346,132 @@ matched against the path relative to the package root. A package's
 .I .stow\-local\-ignore
 never installs itself.
 .
-.SH COMPATIBILITY
-.B gostow
-is a conformance clone of GNU Stow 2.4.1. Its test suite runs the real
-.BR stow (8)
-alongside it and compares standard output, standard error, exit status and the
-resulting directory tree. Four things differ deliberately:
-.IP \(bu 2
-It writes colour when standard output is a terminal. Redirect it, pipe it, or
-set
-.BR NO_COLOR ,
-and every byte is GNU Stow's.
-.IP \(bu 2
-Its
-.B \-\-help
-text and this manual page are its own prose. Option parsing, the usage
-diagnostic on standard error, and the exit codes are unchanged.
-.IP \(bu 2
-It does not reproduce GNU Stow's crashes. GNU Stow dies before doing any work if
-.B $HOME
-contains a regular expression metacharacter such as
-.RB \(lq ( \(rq;
-it abandons a removal if an unrelated symbolic link happens to point at the text
-.RB \(lq 0 \(rq;
-and it silently disables every ignore rule if an ignore file exists but cannot
-be read.
-.B gostow
-does none of these.
-.IP \(bu 2
-It adds the options described under
-.BR "gostow extensions" ,
-all of which are prefixed and unabbreviatable.
+.SH DIVERGENCES
+.\" The body of this section is generated from docs/DIVERGENCES.md by
+.\" internal/mangen (go generate ./...). Do not edit between the markers; edit
+.\" the doc and regenerate. A test fails if this copy drifts.
+.\" BEGIN GENERATED DIVERGENCES
+.\" Imported from docs/DIVERGENCES.md by internal/mangen; do not edit here.
+.\" Edit docs/DIVERGENCES.md and run: go generate ./...
 .PP
-Everything else, including GNU Stow's documented bugs, is reproduced on purpose.
-.B \-\-gostow\-fix
-turns off the bug\-compatibility that can be turned off. See
-.I docs/DIVERGENCES.md
-for the complete account.
+gostow is a drop\-in replacement for GNU Stow 2.4.1. Run it with no special flags and it produces the same symlinks, the same output, and the same exit codes \(em bugs included. Every claim on this page is enforced by a test that runs the real \fBstow\fP binary alongside gostow and compares stdout, stderr, exit code, and the resulting directory tree.
+.PP
+The differences are listed exhaustively below.
+.SS Things gostow fixes without being asked
+.PP
+These are defects, not behavior. Nobody's script depends on them, and reproducing them would mean shipping a tool that breaks in ways stow breaks. gostow does not reproduce any of them, ever, with or without flags.
+.PP
+\fBGNU Stow does this\fP: \fBDies if your home directory contains a \fB(\fP, \fB[\fP, \fB+\fP, \fB*\fP, or \fB?\fP.\fP \fB$HOME\fP is pasted into a regular expression unescaped, so \fBHOME=/home/o'brien(2)\fP kills stow before it does any work, at any verbosity.
+.br
+\fBgostow does this\fP: Runs normally. gostow never builds that expression.
+.PP
+\fBGNU Stow does this\fP: \fBAborts an entire unstow because some unrelated symlink points at the text \fB0\fP.\fP Perl reads the string \fB"0"\fP as false, so a perfectly readable link is reported as unreadable. Exit code 2, nothing removed.
+.br
+\fBgostow does this\fP: Reads the link and carries on.
+.PP
+\fBGNU Stow does this\fP: \fBSilently disables \fIall\fP ignore rules if \fB.stow\-local\-ignore\fP exists but cannot be read.\fP Your \fBREADME.md\fP gets stowed, and the unreadable ignore file stows itself. Exit code 0, no warning.
+.br
+\fBgostow does this\fP: Fails loudly: \fBgostow: ERROR: cannot read ignore file ...\fP, exit 2.
+.PP
+\fBGNU Stow does this\fP: \fBExits with whatever error number the last failed system call left behind\fP \(em 2 here, 255 there, depending on the machine.
+.br
+\fBgostow does this\fP: Every fatal error exits 2.
+.PP
+\fBGNU Stow does this\fP: \fBStows into a directory you never named when a \fB~username\fP fails to resolve.\fP \fB\-\-target=~nosuchuser/tmp/x\fP in a \fB.stowrc\fP expands the unknown user to nothing, leaving \fB/tmp/x\fP, and stow builds the symlink farm there. Exit code 0.
+.br
+\fBgostow does this\fP: Leaves the path alone, so it fails the ordinary check: \fB\-\-target value '~nosuchuser/tmp/x' is not a valid directory\fP, exit 1, nothing written.
+.PP
+\fBGNU Stow does this\fP: Contains code paths that would crash or silently corrupt its own bookkeeping if they were reachable. They are not reachable.
+.br
+\fBgostow does this\fP: Those paths are simply not written.
+.PP
+There are also three differences that are not bugs being fixed:
+.IP \(bu 3
+\fB\fBgostow \-\-version\fP reports gostow's version\fP, naming the stow release it clones: \fBgostow 0.1.1 (GNU Stow 2.4.1 compatible)\fP. Reporting \fB2.4.1\fP for a binary released as \fB0.1.1\fP would be theatre.
+.IP \(bu 3
+\fB\fBgostow \-\-help\fP is written in gostow's own words.\fP It documents the same options, with the same names and the same meanings, and it also documents \fB\-\-no\-folding\fP \(em a real, working flag that stow's own help has never mentioned. The old help block was stow's, copied byte for byte, which had two problems: stow is GPLv3 and gostow is MIT, and the copied text ended \fBReport bugs to: bug\-stow@gnu.org\fP, so gostow was sending its own bug reports to somebody else's mailing list.
+.RS 3
+.PP
+Nothing a script reads changed. Option \fIparsing\fP is still byte\-exact, the usage diagnostic on stderr is still byte\-exact, and so is the exit code. The test suite checks that every option GNU Stow documents, gostow documents too.
+.RE
+.IP \(bu 3
+\fBA bad \fB\-\-ignore\fP, \fB\-\-defer\fP or \fB\-\-override\fP pattern is reported in gostow's words.\fP Real stow lets Perl's regex engine complain, and Perl names a line number inside \fB/usr/bin/stow\fP. gostow says \fBInvalid \-\-ignore regex "(": ...\fP. Everything a script can observe is identical: the pattern is rejected while the command line is being parsed, so it is caught even when you named no packages; the usage block goes to stdout; the exit code is 1; and two bad patterns still produce two complaints.
+.IP \(bu 3
+\fBgostow colors its output when it is talking to a terminal.\fP Real stow never does. Nothing else in this document is additive; this is, because it cannot reach a script. Color appears only when the stream is a terminal, and it only ever wraps text that was already there \(em take the escapes back out and you have stow's bytes, exactly. Redirect to a file, pipe it anywhere, or set \fBNO_COLOR\fP to any non\-empty value, and gostow emits not one escape character. \fBTERM=dumb\fP disables it too.
+.RS 3
+.PP
+The slogan is \fIbyte\-compatible on a pipe, prettier on a TTY\fP. The test suite proves the first half directly: over every shape of line gostow prints, stripping the escapes from a colored line returns the uncolored line exactly, and when color is off the coloring pass does not run at all.
+.RE
+.SS Things gostow reproduces, and \fB\-\-gostow\-fix\fP corrects
+.PP
+These are quirks a script could, in principle, be relying on. They are reproduced faithfully by default. Pass \fB\fB\-\-gostow\-fix\fP\fP to get the sensible behavior instead.
+.PP
+\fBGNU Stow does this\fP: \fB\fB\-\-dotfiles\fP walks straight past a \fB.stow\fP\-protected directory when stowing\fP \(em and creates files inside it \(em while unstowing correctly refuses to touch it. The files are stranded there permanently. This is a real protection bypass.
+.br
+\fB\fB\-\-gostow\-fix\fP does this\fP: Honours the guard when stowing, exactly as it already does when unstowing.
+.PP
+\fBGNU Stow does this\fP: \fB\fBstow \-\- mypackage\fP silently discards \fBmypackage\fP\fP and dies with \fBNo packages to stow or unstow\fP.
+.br
+\fB\fB\-\-gostow\-fix\fP does this\fP: Treats the arguments after \fB\-\-\fP as package names.
+.PP
+\fBGNU Stow does this\fP: \fB\fB.stowrc\fP has no comment syntax.\fP A \fB#\fP is an ordinary word. Bare words after it become package names and are quietly dropped, which is why comments \fIseem\fP to work \(em but anything option\-shaped after a \fB#\fP is silently obeyed. \fB\-\-ignore=keep # \-\-ignore=drop\fP really does ignore \fBdrop\fP.
+.br
+\fB\fB\-\-gostow\-fix\fP does this\fP: \fB#\fP begins a comment. \fB\e#\fP is a literal \fB#\fP.
+.PP
+\fBGNU Stow does this\fP: \fB\fBRMDIR /some/path\fP\fP prints without a colon, while \fBLINK:\fP, \fBUNLINK:\fP, \fBMKDIR:\fP and \fBMV:\fP all have one.
+.br
+\fB\fB\-\-gostow\-fix\fP does this\fP: \fBRMDIR:\fP gets its colon.
+.SS Things gostow reproduces, and does not yet fix
+.PP
+Two of stow's own documented bugs. Fixing them is real work on the algorithm, not a flag, so \fB\-\-gostow\-fix\fP leaves them alone today.
+.IP \(bu 3
+\fBThe empty\-directory problem.\fP Unstowing one package can remove a directory that another, still\-installed package needs.
+.IP \(bu 3
+\fBFolding across stow directories.\fP A folded symlink pointing into a \fIdifferent\fP stow directory does not split open when a second package needs it.
+.PP
+Two more differences are outside stow's control, and outside gostow's:
+.IP \(bu 3
+The wording of \fBValue "abc" invalid for option verbose (...)\fP comes from Perl's \fBGetopt::Long\fP, not from stow, and changed between Perl releases. gostow pins the current wording.
+.IP \(bu 3
+At verbosity 3 and above, stow prints traces of its own Perl call structure. gostow is a different program inside and prints different traces. Verbosity 0 through 2 \(em the levels any script would read \(em are byte\-for\-byte identical, and gostow's higher verbosities always still contain those lines, in order.
+.SS Things gostow cannot do
+.PP
+One, and it is a property of the regex engine rather than a decision.
+.PP
+\fBPerl regexes with lookaround or backreferences are rejected.\fP Go's regular expressions run in time linear in the input and cannot backtrack, which is what makes them immune to the catastrophic blow\-ups a hostile pattern can provoke in Perl. The price is that \fB\-\-ignore='x(?!y)'\fP and \fB\-\-ignore='(k)\e1'\fP compile in stow and not in gostow.
+.PP
+gostow rejects the pattern rather than quietly matching something else:
+.PP
+.RS 4
+.EX
+$ gostow \-\-ignore='x(?!y)' mypackage
+Invalid \-\-ignore regex "x(?!y)": error parsing regexp: invalid or unsupported Perl syntax: `(?!`
+.EE
+.RE
+.PP
+\&...followed by the usage block, exit code 1 \(em the same as any other unusable pattern. Ordinary patterns are unaffected, including inline flags like \fB(?i)\fP, and every pattern in stow's built\-in ignore list, in \fB.stow\-local\-ignore\fP and in \fB.stow\-global\-ignore\fP compiles unchanged.
+.PP
+If a real \fB.stowrc\fP ever needs lookaround, the fix is a backtracking engine used for that pattern alone. Nobody has produced one yet.
+.SS Things gostow installs under its own name
+.PP
+\fB\fBman gostow\fP, not \fBman stow\fP.\fP gostow ships a manual page and completions for bash, zsh and fish, all named after \fBgostow\fP. It does not answer to stow's names, and that is deliberate rather than an oversight.
+.PP
+The pages and scripts live at paths a package owns: \fB/usr/share/man/man8/stow.8\fP, \fB/usr/share/bash\-completion/completions/stow\fP, \fB/usr/share/fish/vendor_completions.d/stow.fish\fP. Those belong to the \fBstow\fP package. Installing our own files there would be a file conflict in apt and dnf, and it would silently replace GNU Stow's manual on any machine that has both. gostow is a drop\-in replacement for the \fIbinary\fP, not a replacement for the \fIpackage\fP \(em it does not claim the name \fBstow\fP in any namespace, including apt, dnf, and completion.
+.PP
+Nor can the second name simply be registered from inside gostow's own file, except in zsh. Bash and fish autoload a completion by opening a file named after the command being completed, so the registration would never run. Registering it in zsh alone would give a completion that appears in one shell and not the others, which is worse than none.
+.PP
+If you have symlinked \fBstow\fP to gostow, opt in from your shell's rc file:
+.PP
+.RS 4
+.EX
+complete \-F _gostow stow            # bash
+compdef _gostow stow                # zsh, after compinit
+complete \-c stow \-\-wraps gostow     # fish
+.EE
+.RE
+.PP
+GNU Stow ships no completions of its own, so nothing is being overridden. And gostow's manual page documents every option gostow accepts \(em which is more than either of GNU Stow's own references manages, since \fBstow \-\-help\fP omits \fB\-\-no\-folding\fP and \fBstow.8\fP omits \fB\-\-compat\fP.
+.\" END GENERATED DIVERGENCES
 .
 .SH SEE ALSO
 .BR stow (8)
