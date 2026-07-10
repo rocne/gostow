@@ -23,6 +23,30 @@ Packages are published for linux and macOS on amd64 and arm64. Every method belo
 the binary as **`gostow`**; see [Using it as a drop-in](#using-it-as-a-drop-in) to make it
 answer to `stow`.
 
+### Quick install — `curl | sh`
+
+```console
+$ curl -fsSL https://raw.githubusercontent.com/rocne/gostow/main/install.sh | sh
+```
+
+One self-contained script for any Linux or macOS on amd64 or arm64. It detects your OS and
+architecture, downloads the matching release tarball, **verifies its SHA-256 checksum before
+touching anything** (and its cosign signature too, if you have `cosign` installed), then
+installs the `gostow` binary to `~/.local/bin` along with the man page and shell completions.
+No root required.
+
+Piping a script into a shell is a real thing to be uneasy about. Read it first if you like —
+it is [`install.sh`](install.sh) in this repo, and the URL above is that same file — or pass
+`--dry-run` to see exactly what it would do:
+
+```console
+$ curl -fsSL https://raw.githubusercontent.com/rocne/gostow/main/install.sh | sh -s -- --dry-run
+```
+
+It takes `--version v0.2.0` to pin a release, `--dir DIR` to install elsewhere, `--bin-only`
+to skip the man page and completions, and `--os`/`--arch` to override detection. The manual
+tarball recipe [below](#any-linux-or-macos--tarball) does the same steps by hand.
+
 ### macOS — Homebrew
 
 ```console
