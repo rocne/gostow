@@ -125,19 +125,3 @@ func joinPaths(paths ...string) string {
 	result = removeParentRefs(result)
 	return canonpath(result)
 }
-
-// parent returns everything above the last path segment. Runs of slashes count
-// as one separator and a trailing slash is not a segment, so parent("a/b/c/")
-// is "a/b". A single-segment path has parent "".
-func parent(paths ...string) string {
-	path := strings.Join(paths, "/")
-	elts := reSlashRun.Split(path, -1)
-	// Perl's split discards trailing empty fields.
-	for len(elts) > 0 && elts[len(elts)-1] == "" {
-		elts = elts[:len(elts)-1]
-	}
-	if len(elts) == 0 {
-		return ""
-	}
-	return strings.Join(elts[:len(elts)-1], "/")
-}

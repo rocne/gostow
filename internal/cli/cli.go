@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/rocne/gostow/internal/stowpath"
 	"github.com/rocne/gostow/internal/ui"
 	"github.com/rocne/gostow/stow"
 )
@@ -189,7 +190,9 @@ func (a *app) sanitizePaths(p *parsed) (dir, target string, code int, err error)
 			return "", "", a.usage(fmt.Sprintf("--target value '%s' is not a valid directory", target), true), nil
 		}
 	} else {
-		target = parentOf(dir)
+		// bin/stow: $target = parent($stow_dir) || '.'. Parent("/tmp") is "",
+		// not "/", so a single-segment stow dir targets the cwd.
+		target = stowpath.Parent(dir)
 		if target == "" {
 			target = "."
 		}
@@ -200,20 +203,6 @@ func (a *app) sanitizePaths(p *parsed) (dir, target string, code int, err error)
 func isDir(p string) bool {
 	fi, err := os.Stat(p)
 	return err == nil && fi.IsDir()
-}
-
-// parentOf is Stow::Util::parent: runs of slashes are one separator and a
-// trailing slash is not a segment.
-func parentOf(path string) string {
-	elts := strings.FieldsFunc(path, func(r rune) bool { return r == '/' })
-	if len(elts) == 0 {
-		return ""
-	}
-	prefix := ""
-	if strings.HasPrefix(path, "/") {
-		prefix = "/"
-	}
-	return prefix + strings.Join(elts[:len(elts)-1], "/")
 }
 
 func (a *app) checkPackages(p *parsed) (int, error) {

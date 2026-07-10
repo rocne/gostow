@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/rocne/gostow/internal/stowpath"
 )
 
 // Action is what a Request does with its packages.
@@ -500,8 +502,8 @@ func (e *engine) stowOverExistingLink(stowPath, pkg, pkgSubpath, targetSubpath, 
 		}
 		e.doLink(linkDest, targetSubpath)
 
-	case e.isADir(joinPaths(parent(targetSubpath), existingLinkDest)) &&
-		e.isADir(joinPaths(parent(targetSubpath), linkDest)):
+	case e.isADir(joinPaths(stowpath.Parent(targetSubpath), existingLinkDest)) &&
+		e.isADir(joinPaths(stowpath.Parent(targetSubpath), linkDest)):
 		// Both the folded tree and the newcomer are directories, so the fold is
 		// split open and both packages are stowed into the real directory.
 		e.debug(2, 0, "--- Unfolding %s which was already owned by %s", targetSubpath, existingPackage)
@@ -660,7 +662,7 @@ func (e *engine) findStowedPath(targetSubpath, linkDest string) (pkgPath, stowPa
 	if strings.HasPrefix(linkDest, "/") {
 		return "", "", ""
 	}
-	candidate := joinPaths(parent(targetSubpath), linkDest)
+	candidate := joinPaths(stowpath.Parent(targetSubpath), linkDest)
 
 	if p, _ := e.linkDestWithinStowDir(candidate); p != "" {
 		return candidate, e.stowPath, p
@@ -767,7 +769,7 @@ func (e *engine) foldable(targetSubdir string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		newParent := parent(linkDest)
+		newParent := stowpath.Parent(linkDest)
 		if parentInPkg == "" {
 			parentInPkg = newParent
 		} else if parentInPkg != newParent {

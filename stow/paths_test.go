@@ -44,26 +44,6 @@ func TestJoinPaths(t *testing.T) {
 }
 
 // Ported from stow 2.4.1's t/parent.t (5 assertions).
-func TestParent(t *testing.T) {
-	tests := []struct {
-		scenario string
-		in       string
-		want     string
-	}{
-		{"no leading or trailing /", "a/b/c", "a/b"},
-		{"leading /", "/a/b/c", "/a/b"},
-		{"trailing /", "a/b/c/", "a/b"},
-		{"multiple /", "/////a///b///c///", "/a/b"},
-		{"empty parent", "a", ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.scenario, func(t *testing.T) {
-			if got := parent(tt.in); got != tt.want {
-				t.Errorf("parent(%q) = %q, want %q", tt.in, got, tt.want)
-			}
-		})
-	}
-}
 
 // canonpath is a port of a Perl core routine and is exercised only indirectly by
 // join_paths. These cases pin the transformations join_paths depends on, and

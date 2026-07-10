@@ -35,7 +35,7 @@ func TestHelpDocumentsEveryOptionStowDocuments(t *testing.T) {
 	t.Logf("GNU Stow documents %d options: %s", len(want), strings.Join(want, " "))
 
 	for _, flag := range want {
-		if !mentionsFlag(gostowHelp, flag) {
+		if !MentionsFlag(gostowHelp, flag) {
 			t.Errorf("stow --help documents %s; gostow --help never names it", flag)
 		}
 	}
@@ -77,10 +77,4 @@ func documentedFlags(help string) []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-// mentionsFlag finds flag as a whole token, so "--no" is not satisfied by
-// "--no-folding" and "-d" is not satisfied by "-dir".
-func mentionsFlag(help, flag string) bool {
-	return regexp.MustCompile(regexp.QuoteMeta(flag) + `([^\w-]|$)`).MatchString(help)
 }

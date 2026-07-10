@@ -3,9 +3,10 @@ package cli
 import (
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/rocne/gostow/internal/conformance"
 )
 
 // --gostow-* flags answer only to their exact name. Without NoAbbrev, adding
@@ -64,17 +65,11 @@ func TestHelpDocumentsEveryOption(t *testing.T) {
 			if len(name) > 1 {
 				flag = "--" + name
 			}
-			if !mentionsFlag(stdout, flag) {
+			if !conformance.MentionsFlag(stdout, flag) {
 				t.Errorf("--help never names %s", flag)
 			}
 		}
 	}
-}
-
-// mentionsFlag looks for flag as a whole token, so "--no" is not found inside
-// "--no-folding" and "-d" is not found inside "-dir".
-func mentionsFlag(help, flag string) bool {
-	return regexp.MustCompile(regexp.QuoteMeta(flag) + `([^\w-]|$)`).MatchString(help)
 }
 
 // gostow must not send its own bug reports to somebody else's mailing list. The

@@ -379,6 +379,29 @@ Resolution order, in the order the code performs it **[source]**:
 5. Validate `dir` is a directory; else usage error, exit 1. **[probed]**
 6. Resolve `target`: if unset, `parent(dir)`, falling back to `.`. Validate if given.
 
+**`parent` is `Stow::Util::parent`, and its edge case matters.** Perl's `split /\/+/` on an
+absolute path leaves a *leading empty field*, which is then dropped along with the last
+segment — so a single-segment absolute path has parent `""`, not `"/"`:
+
+```
+parent("/tmp")           == ""        → bin/stow's `|| '.'` → target is the cwd
+parent("/usr/local/stow") == "/usr/local"
+```
+
+gostow shipped `v0.1.0` getting this wrong. `internal/cli` carried its own transcription of
+`parent`, returning `"/"` for `"/tmp"`, so `stow -d /tmp pkg` aimed the symlink farm at the
+filesystem root instead of the current directory. The engine's copy was correct and tested;
+the CLI's was untested, because **every differential fixture passed an explicit `--target`**.
+
+Two lessons, both now enforced. The function lives once, in `internal/stowpath`, and is
+compared against real `Stow::Util::parent` over 39 paths. And `Case.Cwd` — a fixture field
+nothing used — now drives fixtures for the commonest invocation there is,
+`cd ~/dotfiles && stow vim`, with neither `--dir` nor `--target` given.
+
+Note the differential fixtures cannot catch *this* bug: a sandbox root is a deep temp path,
+so `parent` there is always multi-segment. Only the unit-level oracle reaches it. Coverage
+of a code path is not coverage of its inputs.
+
 ### 5.1 `.stowrc` file discovery — the manual is wrong
 
 The man page states stow reads *"`.stowrc` (current directory) and `~/.stowrc` (home

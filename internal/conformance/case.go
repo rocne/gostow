@@ -88,9 +88,31 @@ func (c Case) environ(root string) []string {
 		"PATH=/usr/local/bin:/usr/bin:/bin",
 	}
 	for _, e := range c.Env {
-		env = append(env, strings.ReplaceAll(e, SandboxToken, root))
+		env = append(env, expandSandbox(e, root))
 	}
 	return env
+}
+
+// expandSandbox substitutes the sandbox root for SandboxToken. Both sandboxes get
+// the same argv text and each resolves it to its own root, so an absolute path
+// can be a fixture without pinning it to one temp directory. Normalize puts the
+// token back before the streams are compared.
+func expandSandbox(s, root string) string {
+	return strings.ReplaceAll(s, SandboxToken, root)
+}
+
+// argv returns Args with the sandbox root substituted.
+func (c Case) argv(root string) []string { return expandAll(c.Args, root) }
+
+func expandAll(in []string, root string) []string {
+	if in == nil {
+		return nil
+	}
+	out := make([]string, len(in))
+	for i, s := range in {
+		out[i] = expandSandbox(s, root)
+	}
+	return out
 }
 
 // Exec materialises the case into a fresh temp sandbox, runs bin from Cwd, and
@@ -110,7 +132,7 @@ func (c Case) ExecAt(t *testing.T, bin, root string) (Run, string) {
 	if err := c.Materialize(root); err != nil {
 		t.Fatalf("materialize case %q: %v", c.Name, err)
 	}
-	run := RunBinary(bin, c.Args, c.environ(root), filepath.Join(root, c.Cwd))
+	run := RunBinary(bin, c.argv(root), c.environ(root), filepath.Join(root, c.Cwd))
 	tree, err := Snapshot(root)
 	if err != nil {
 		t.Fatalf("snapshot case %q: %v", c.Name, err)
