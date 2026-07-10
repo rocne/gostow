@@ -859,10 +859,14 @@ All ledger items are now ruled. What remains:
 Nothing. Every ledger item is ruled, every slice in `TEST-PLAN.md` §5 is implemented, and
 each is pinned by a differential test against the pinned oracle.
 
-What that claim does **not** mean: parity is evidenced, not proved. The suite compares 6307
-argv vectors against real `Getopt::Long`, 1140 ignore verdicts against `Stow.pm`'s own
-`ignore()`, and 60 whole-invocation fixtures against the real binary — stdout bytes, stderr
-bytes, exit code and resulting tree. A fixture nobody wrote is a behaviour nobody checked.
+What that claim does **not** mean: parity is evidenced, not proved. The suite compares argv
+vectors against real `Getopt::Long`, ignore verdicts against `Stow.pm`'s own `ignore()`,
+`parent` and `join_paths` against `Stow::Util`, errno strings against Perl's `$!`, and
+whole-invocation fixtures against the real binary — stdout bytes, stderr bytes, exit code and
+resulting tree. **Every one of those tests prints its own count; read it there, never from a
+document.** A fixture nobody wrote is a behaviour nobody checked, and on 2026-07-10 an audit
+found six parity bugs in exactly the places nobody had written one: error paths, and non-zero
+verbosity on a non-happy path (`docs/audit-2026-07-10.md`).
 
 ### Settled (2026-07-09)
 
