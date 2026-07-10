@@ -251,9 +251,10 @@ Port priority, highest value first:
 1. ~~`ignore.t`~~ — **done, but not by porting.** Its 287 assertions all call `Stow.pm`'s
    `ignore()` predicate directly. Rather than transcribe the expectations — which would
    re-import whatever misreading the transcriber brought — `stow/ignore_oracle_test.go`
-   drives that same predicate over 19 ignore-file fixtures × 60 paths (1140 comparisons),
-   covering ignore.t's own cases plus the built-in list's prefix/suffix edges. Verified
-   non-vacuous by mutation.
+   drives that same predicate over a matrix of ignore-file fixtures × paths, covering
+   ignore.t's own cases plus the built-in list's prefix/suffix edges. The test prints the
+   count it actually ran; an earlier version of this line said 1140 and was wrong by 76.
+   Verified non-vacuous by mutation.
 2. `stow.t` (22) and `unstow.t` (35) — the core algorithm.
 3. `rc_options.t` (35) — `.stowrc` merge/precedence, where the manual is wrong (PL-01).
 4. `dotfiles.t` (14) — note the tarball also ships `dotfiles.t.rej` and `unstow.t.orig`,
@@ -319,3 +320,8 @@ All three source-derived ledger items have been probed against the real binary. 
 - **stow's Perl internals.** We test observable behaviour at S1/S2 and pure functions at S3.
 - **Verbosity ≥3 byte output**, pending PL-11.
 - **Performance.** stow is not fast; being faster is free and unmeasured.
+- **`--adopt` across a filesystem boundary.** `os.Rename` and Perl's `rename` both fail with
+  `EXDEV`, and since 2026-07-10 the *message* is errno-derived on both sides — but no fixture
+  proves it, because one needs two mount points. Named here rather than assumed away.
+- **Perl-only regex constructs.** Lookaround and backreferences are rejected at parse time
+  (PL-22), which is asserted; what they would have *matched* is not, and cannot be.

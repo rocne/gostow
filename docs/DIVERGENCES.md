@@ -25,7 +25,7 @@ reproduce any of them, ever, with or without flags.
 | **Stows into a directory you never named when a `~username` fails to resolve.** `--target=~nosuchuser/tmp/x` in a `.stowrc` expands the unknown user to nothing, leaving `/tmp/x`, and stow builds the symlink farm there. Exit code 0. | Leaves the path alone, so it fails the ordinary check: `--target value '~nosuchuser/tmp/x' is not a valid directory`, exit 1, nothing written. |
 | Contains code paths that would crash or silently corrupt its own bookkeeping if they were reachable. They are not reachable. | Those paths are simply not written. |
 
-There are also two cosmetic differences that are not bugs being fixed:
+There are also three differences that are not bugs being fixed:
 
 - **`gostow --version` reports gostow's version**, naming the stow release it clones:
   `gostow 0.1.0 (GNU Stow 2.4.1 compatible)`. Reporting `2.4.1` for a binary released
@@ -163,3 +163,10 @@ stow.Apply(stow.Options{
 building something better on top of the engine — rather than a replacement for stow —
 should turn it on. In particular, the `--dotfiles` protection bypass in §2 is the one
 defect a library consumer would otherwise inherit without ever knowing it was there.
+
+Three smaller exports exist for consumers that reproduce stow's own wording or accept its
+regex flags: `stow.Gerund` gives the word stow interpolates into a conflict report
+(`stowing`, `unstowing`), and `stow.CompilePattern` with `stow.IgnoreAnchor` or
+`stow.PrefixAnchor` compiles an `--ignore`/`--defer`/`--override` pattern exactly as stow
+anchors it — so a front end can reject a bad pattern while parsing, as stow does, instead of
+discovering it much later.
