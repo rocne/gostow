@@ -91,15 +91,18 @@ ACTIONS:
 
 CHOOSING FILES:
 
-    --dotfiles            Translate a leading "dot-" to ".", so the package
-                          file "dot-vimrc" is stowed as ".vimrc"
     --ignore=REGEX        Skip files whose path ends with this regex
     --defer=REGEX         Do not stow files whose path starts with this regex
                           if another package already stowed them
     --override=REGEX      Stow them anyway, replacing the other package's links
 
-BEHAVIOUR:
+    REGEX is RE2 (Go's regexp syntax), not Perl: lookaround and backreferences
+    are rejected, but inline flags such as (?i) work.
 
+BEHAVIOR:
+
+    --dotfiles            Translate a leading "dot-" to ".", so the package
+                          file "dot-vimrc" is stowed as ".vimrc"
     --adopt               Move a conflicting target file into the package and
                           link it back. Rewrites your package — commit first
     --no-folding          Never fold a directory into a single symlink; create
@@ -111,12 +114,22 @@ OUTPUT:
     -n, --no, --simulate  Plan the changes and print them; touch nothing
     -v, --verbose[=N]     Increase verbosity (0 to 5; -v adds 1, --verbose=N
                           sets the level outright)
+
+INFORMATION:
+
     -V, --version         Print the version and exit
     -h, --help            Print this help and exit
-    --gostow-fix          Fix GNU Stow's known defects instead of matching them
-    --gostow-help         Explain gostow's extensions and divergences
 
-gostow reproduces GNU Stow's behaviour, not its prose. Where an option's meaning
+GOSTOW EXTENSIONS:
+
+    --gostow-fix          Fix GNU Stow's known defects instead of matching them.
+                          Run "man gostow" for the full list of divergences
+
+Without --gostow-fix, gostow is GNU Stow: same behavior, same exit codes, same
+symlinks, bugs included. The one addition you cannot turn off is color, and only
+when the output is a terminal — pipe it and every byte is stow's.
+
+gostow reproduces GNU Stow's behavior, not its prose. Where an option's meaning
 needs more than a line — and several do — GNU Stow's manual is the authority,
 and it describes gostow exactly:
 
@@ -124,29 +137,4 @@ and it describes gostow exactly:
 
 Report gostow's bugs to: %s
 `, prog, StowManualURL, BugURL)
-}
-
-// extensionHelp is the long form of what --help lists in two lines.
-//
-// Every gostow flag is prefixed "gostow-" and answers only to its exact name,
-// never to an abbreviation — so no argv that real stow accepts is parsed
-// differently here. See SPEC §8.35.
-func extensionHelp(version string) string {
-	return IdentityLine(version) + fmt.Sprintf(`
-
-GOSTOW EXTENSIONS:
-
-These flags do not exist in GNU Stow. They cannot be abbreviated, so no command
-line that GNU Stow accepts is parsed differently by gostow.
-
-    --gostow-fix          Fix GNU Stow's known defects instead of reproducing
-                          them. See docs/DIVERGENCES.md for the exact list.
-    --gostow-help         Show this help
-
-Without --gostow-fix, gostow is GNU Stow %s: same behaviour, same exit codes,
-same symlinks, bugs included. The one addition you cannot turn off is colour,
-and only when the output is a terminal — pipe it and every byte is stow's.
-
-Report gostow's bugs to: %s
-`, StowVersion, BugURL)
 }

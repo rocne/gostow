@@ -727,7 +727,8 @@ gostow adds nothing to stow's option namespace. Anything gostow invents is prefi
 1. **Listed in `--help`**, because a flag nobody can discover is a flag nobody uses.
    No filtering is needed to keep that safe: help prose is not part of parity (§4.5), and
    what *is* checked — that gostow documents every option stow documents — is unharmed by
-   gostow documenting more. `--gostow-help` prints the long form.
+   gostow documenting more. The full divergence list lives in `man gostow`, imported from
+   `docs/DIVERGENCES.md` by `internal/mangen`.
 2. **Never abbreviated.** Extension options are `NoAbbrev` in `internal/getopt`, so they are
    absent from prefix matching *and* from ambiguity lists. `--g` therefore remains
    `Unknown option: g`, exactly as in real stow. Without this, adding an extension would

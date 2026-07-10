@@ -154,10 +154,6 @@ func (a *app) finishParse(p parsed) (int, bool) {
 	if p.help {
 		return a.usage("", false), true
 	}
-	if p.gostowHelp {
-		fmt.Fprint(a.stdout, extensionHelp(a.version))
-		return exitOK, true
-	}
 	if p.version {
 		fmt.Fprintln(a.stdout, IdentityLine(a.version))
 		return exitOK, true

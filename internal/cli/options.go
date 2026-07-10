@@ -29,14 +29,13 @@ func spec() []getopt.Option {
 		{Names: []string{"S", "stow"}},
 		{Names: []string{"R", "restow"}},
 
-		// gostow's own extensions. Two rules keep them from denting parity: they
-		// are prefixed "gostow-", and they are NoAbbrev — so adding them cannot
-		// make "--g" resolve to anything real stow would have rejected. They are
-		// listed in --help, because a flag nobody can discover is a flag nobody
-		// uses; --gostow-help prints the long form, and docs/DIVERGENCES.md is
-		// the full account. The parity suite forbids any fixture from using them.
+		// gostow's own extension. Two rules keep it from denting parity: it is
+		// prefixed "gostow-", and it is NoAbbrev — so adding it cannot make "--g"
+		// resolve to anything real stow would have rejected. It is listed in
+		// --help, because a flag nobody can discover is a flag nobody uses, and
+		// the DIVERGENCES section of the man page is the full account. The parity
+		// suite forbids any fixture from using it.
 		{Names: []string{"gostow-fix"}, NoAbbrev: true},
-		{Names: []string{"gostow-help"}, NoAbbrev: true},
 	}
 }
 
@@ -58,9 +57,8 @@ type parsed struct {
 	override  []string
 	deferred  []string
 
-	// gostow's own extensions; see spec().
-	fixQuirks  bool
-	gostowHelp bool
+	// gostow's own extension; see spec().
+	fixQuirks bool
 
 	// requests preserves the order of -D/-S/-R and the package names they
 	// govern. rc files parse into these too, and then discard them.
@@ -138,8 +136,6 @@ func parseArgs(args []string) parsed {
 			p.dotfiles = true
 		case "gostow-fix":
 			p.fixQuirks = true
-		case "gostow-help":
-			p.gostowHelp = true
 		case "dir":
 			v := e.Value
 			p.dir = &v

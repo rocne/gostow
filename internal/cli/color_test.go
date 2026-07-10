@@ -38,7 +38,6 @@ func TestColouredHelpIsARendering(t *testing.T) {
 		text string
 	}{
 		{"help", usageText("stow", "0.1.0")},
-		{"extension help", extensionHelp("0.1.0")},
 		{"identity line", IdentityLine("0.1.0") + "\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

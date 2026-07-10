@@ -6,13 +6,13 @@ included. Every claim on this page is enforced by a test that runs the real
 `stow` binary alongside gostow and compares stdout, stderr, exit code, and the
 resulting directory tree.
 
-There are four kinds of difference, and they are listed exhaustively below.
+The differences are listed exhaustively below.
 
 ---
 
 ## 1. Things gostow fixes without being asked
 
-These are defects, not behaviour. Nobody's script depends on them, and reproducing
+These are defects, not behavior. Nobody's script depends on them, and reproducing
 them would mean shipping a tool that breaks in ways stow breaks. gostow does not
 reproduce any of them, ever, with or without flags.
 
@@ -49,16 +49,16 @@ There are also three differences that are not bugs being fixed:
   it is caught even when you named no packages; the usage block goes to stdout; the exit
   code is 1; and two bad patterns still produce two complaints.
 
-- **gostow colours its output when it is talking to a terminal.** Real stow never does.
+- **gostow colors its output when it is talking to a terminal.** Real stow never does.
   Nothing else in this document is additive; this is, because it cannot reach a script.
-  Colour appears only when the stream is a terminal, and it only ever wraps text that was
+  Color appears only when the stream is a terminal, and it only ever wraps text that was
   already there — take the escapes back out and you have stow's bytes, exactly. Redirect
   to a file, pipe it anywhere, or set `NO_COLOR` to any non-empty value, and gostow emits
   not one escape character. `TERM=dumb` disables it too.
 
   The slogan is *byte-compatible on a pipe, prettier on a TTY*. The test suite proves the
   first half directly: over every shape of line gostow prints, stripping the escapes from
-  a coloured line returns the uncoloured line exactly, and when colour is off the colouring
+  a colored line returns the uncolored line exactly, and when color is off the coloring
   pass does not run at all.
 
 ---
@@ -66,7 +66,7 @@ There are also three differences that are not bugs being fixed:
 ## 2. Things gostow reproduces, and `--gostow-fix` corrects
 
 These are quirks a script could, in principle, be relying on. They are reproduced
-faithfully by default. Pass **`--gostow-fix`** to get the sensible behaviour instead.
+faithfully by default. Pass **`--gostow-fix`** to get the sensible behavior instead.
 
 | GNU Stow does this | `--gostow-fix` does this |
 |---|---|
@@ -162,10 +162,10 @@ own references manages, since `stow --help` omits `--no-folding` and `stow.8` om
 gostow adds no flags to stow's namespace. Anything gostow invents is prefixed
 `--gostow-`, and three rules keep that from denting parity:
 
-1. **They are listed in `--help`,** because a flag nobody can find is a flag nobody uses.
+1. **It is listed in `--help`,** because a flag nobody can find is a flag nobody uses.
    That is safe because help text is not part of the promise — what the suite checks is
    that gostow documents every option GNU Stow documents, and listing *more* cannot break
-   that. `--gostow-help` prints the long explanation.
+   that. The full account of every divergence lives in this document and in `man gostow`.
 2. **It cannot be abbreviated.** `--gostow-fix` answers only to its exact spelling, so
    `--g` remains `Unknown option: g`, exactly as in real stow. Adding an extension can
    never change how an existing argv parses.

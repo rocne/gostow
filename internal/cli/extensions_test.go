@@ -38,10 +38,8 @@ func TestExtensionFlagsAreVisibleInHelp(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit = %d, want 0", code)
 	}
-	for _, want := range []string{"--gostow-fix", "--gostow-help"} {
-		if !strings.Contains(stdout, want) {
-			t.Errorf("--help should list %s", want)
-		}
+	if !strings.Contains(stdout, "--gostow-fix") {
+		t.Error("--help should list --gostow-fix")
 	}
 }
 
@@ -89,19 +87,6 @@ func TestHelpPointsBugsAtGostow(t *testing.T) {
 	// no second description to keep in sync, so the link must survive.
 	if !strings.Contains(stdout, StowManualURL) {
 		t.Errorf("--help should credit and link GNU Stow's manual at %s", StowManualURL)
-	}
-}
-
-func TestGostowHelpListsTheExtensions(t *testing.T) {
-	root := fixture(t)
-	stdout, _, code := run(t, root, map[string]string{"HOME": filepath.Join(root, "home")}, "--gostow-help")
-	if code != 0 {
-		t.Fatalf("exit = %d, want 0", code)
-	}
-	for _, want := range []string{"--gostow-fix", "--gostow-help", "GOSTOW EXTENSIONS"} {
-		if !strings.Contains(stdout, want) {
-			t.Errorf("--gostow-help output should mention %q", want)
-		}
 	}
 }
 

@@ -38,8 +38,7 @@ _gostow() {
         '*'{-v,--verbose=}'[increase verbosity (0-5)]::level:(0 1 2 3 4 5)' \
         '(- *)'{-V,--version}'[print the version and exit]' \
         '(- *)'{-h,--help}'[print help and exit]' \
-        '(- *)--gostow-help[explain gostow'\''s extensions and exit]' \
-        '--gostow-fix[fix GNU Stow'\''s defects instead of matching them]' \
+        '--gostow-fix[fix GNU Stow'\''s defects; see man gostow for divergences]' \
         '*:package:_gostow_packages'
 }
 
