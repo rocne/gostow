@@ -63,6 +63,14 @@ All changes go to a feature branch and merge via PR — **never commit directly 
 `main`.** Before every push, run `gh pr view` to confirm the PR is still open; if it
 merged, cut a new branch/PR.
 
+**Squash-merge only.** The repo allows no other method, the squash subject is the PR
+title, and the squash body is the PR body. This is what makes "PR titles are the source
+of truth" true rather than aspirational: a merge commit whose subject is also the PR
+title hands release-please the same Conventional Commit twice, and the changelog says
+so. PR #18 shipped that duplicate into 0.1.1's changelog. A `Release-As:` or
+`BREAKING CHANGE:` footer therefore belongs in the **PR body**, which is the only route
+by which a footer now reaches `main`.
+
 ## Release Process (target)
 
 Ride the same machinery as the sibling projects: release-please driven by
@@ -172,7 +180,9 @@ stows, unstows, restows, folds, unfolds and refolds; parses `.stowrc`; honours t
 ignore lists; and reports conflicts and exit codes.
 
 Layout: `stow/` is the engine (a deep module: `Apply` plus `Stow`/`Unstow`/`Restow`
-sugar), `internal/getopt` is a `Getopt::Long`-compatible parser, `internal/cli` is the
+sugar), `internal/stowpath` holds the ports of stow's path helpers that both the engine
+and the CLI need (it exists because `parent` was copied instead of shared, and the copy
+was wrong), `internal/getopt` is a `Getopt::Long`-compatible parser, `internal/cli` is the
 front end, `internal/ui` is colour-on-a-TTY, `internal/conformance` is the differential
 harness.
 
