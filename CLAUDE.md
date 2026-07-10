@@ -249,7 +249,7 @@ Three lessons, all now enforced rather than remembered:
 - **`go test -coverprofile` cannot see a binary the harness execs.** `doMv` read 0% while
   fixtures drove it, because coverage is linked into the test binary, not the subprocess.
   Same blind spot as the test cache. The engine's destructive paths are now driven in
-  process too. TEST-PLAN §3.5.
+  process too. TEST-PLAN §3.6.
 - **A fixture can be vacuous.** `Node.Mode` used zero to mean "unset", so `Mode: 0o000` made
   an "unreadable" directory readable. Mutate the code; watch the test go red. Every fix in
   that audit's wake was confirmed that way.
@@ -257,6 +257,13 @@ Three lessons, all now enforced rather than remembered:
 The goldens layer (L5) now exists: `go test ./...` checks gostow against recordings of the
 pinned oracle, with no Perl. Regenerate with `-update-goldens`, which is declared only under
 the `oracle` build tag so the hermetic suite cannot rewrite its own answers.
+
+A seventh bug surfaced afterwards, closing the audit's one "probably fine": `Stow.pm` moves
+files with `File::Copy::move`, not `rename`, *because the stow directory may be on a different
+filesystem from the target* — its own comment says so. gostow used `os.Rename` and aborted
+with `EXDEV`. **Ask what a fixture format cannot say**: the differential harness has one
+sandbox root, so no fixture could ever put the two directories on different filesystems.
+TEST-PLAN §3.5.
 
 Still owed before v1:
 

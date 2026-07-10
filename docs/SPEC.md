@@ -865,6 +865,8 @@ table is a deliverable in its own right.
 
 | PL-22 | Perl regexes accept lookaround and backreferences; RE2 does not. `stow --ignore='x(?!y)' pkg` and `stow --ignore='(k)\1' pkg` both run; gostow rejects the pattern. | **probed (2026-07-10): confirmed** | 2 | **RULED: reject at parse time, and say so.** This is §11.5's ruling reaching the three CLI flags, which it never explicitly named. gostow prints `Invalid --ignore regex "x(?!y)": ... invalid or unsupported Perl syntax: `(?!`` and exits 1 with the usage block — the same shape as any other uncompilable pattern (PL-20), so a script sees a rejected option rather than a silent mismatch. Inline flags such as `(?i)` work in both. The escape hatch in §11.5 (a vendored backtracking engine, for the failing pattern only) stays available and unbuilt: no real-world `.stowrc` has been observed to need it. Recorded in `docs/DIVERGENCES.md` §4. |
 
+| PL-23 | `Stow.pm` moves a file with `File::Copy::move`, not `rename`, and says why: *"rename() not good enough, since the stow directory might be on a different filesystem to the target."* The fallback is `copy` → `utime` → `unlink`, so a cross-filesystem `--adopt` succeeds — and the destination keeps **its own** mode while a same-filesystem `rename` carries the **source's**. | **probed (2026-07-10): confirmed** | 1 | **RULED: replicate.** Not a quirk — a documented accommodation for an ordinary layout (`~/dotfiles` on one volume, `$HOME` on another; `/usr/local/stow` beside a separately mounted `/usr/local`). gostow called `os.Rename`, which fails `EXDEV`: it printed `MV:` and `LINK:`, then aborted with `Could not move f -> … (Invalid cross-device link)`, changing nothing. `stow/move.go` ports `File::Copy::_move`, including the consequences probed against Perl 5.40: a new destination lands at `0666 &^ umask`, an existing one keeps its mode, and atime/mtime come from the source. Under `--adopt` the destination always exists, so the package file keeps its mode and the target's is discarded. Found 2026-07-10 while closing the audit's U4, which had guessed parity held. |
+
 **Upstream bug reports to file:** PL-01, PL-03, PL-04, PL-05, PL-06, PL-08, PL-09, PL-10, **PL-18** (highest severity: a `$HOME` containing a regex metacharacter makes stow unusable), PL-21.
 
 ---
@@ -952,9 +954,10 @@ What remains before a `v1` tag:
 - **Ten upstream bug reports**, unwritten: PL-01, PL-03, PL-04, PL-05, PL-06, PL-08, PL-09,
   PL-10, PL-18, PL-21. The worst is PL-18: a `$HOME` containing a regex metacharacter makes
   real stow unusable.
-- **`--adopt` across a filesystem boundary** (`EXDEV`) has no fixture. `os.Rename` and Perl's
-  `rename` both fail with it, so parity of the *event* is likely and the *message* is now
-  covered by the errno work — but neither suite proves it. It needs two mount points.
+- Nothing else. `--adopt` across a filesystem boundary **was** the last untested claim, and
+  closing it found a seventh parity bug (PL-23): stow uses `File::Copy::move`, not `rename`,
+  and succeeds where gostow aborted. No mount points were needed — `/dev/shm` is a tmpfs and
+  is not the filesystem holding `/tmp`.
 
 What that claim does **not** mean: parity is evidenced, not proved. The suite compares argv
 vectors against real `Getopt::Long`, ignore verdicts against `Stow.pm`'s own `ignore()`,
