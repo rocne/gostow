@@ -140,7 +140,35 @@ type Conflict struct {
     Message string // byte-exact stow wording; see §8.3
 }
 
+// ConflictError is returned when planning found any conflict. Nothing was written.
 type ConflictError struct{ Conflicts []Conflict }
+
+// FatalError is anything else that stopped the run. Pinned to exit 2 (PL-07).
+type FatalError struct{ Msg string }
+
+// String names the action for diagnostics and %v. Deliberately NOT the source of
+// any user-facing wording — see Gerund.
+func (a Action) String() string
+
+// Gerund is the word stow interpolates into its own diagnostics: Stow.pm builds
+// both the level-2 CONFLICT line and bin/stow's conflict banner from
+// "${action}ing". A table, not String()+"ing": those bytes are parity-pinned and
+// the Stringer is free to be renamed.
+func Gerund(a Action) string
+
+// The anchors bin/stow wraps around its three regex options, inside the
+// Getopt::Long callbacks that compile them. Exported because the anchor decides
+// whether a pattern compiles at all, and the CLI must reject a bad pattern at
+// parse time — exactly where stow does (PL-20). Transcribing them a second time
+// in internal/cli is how the `parent` bug was born.
+const (
+    IgnoreAnchor = "(%s)$"  // qr{($regex)\z}
+    PrefixAnchor = "^(%s)"  // qr{\A($regex)}
+)
+
+// CompilePattern compiles one --ignore/--defer/--override pattern under its
+// anchor. flag names the option, for the diagnostic.
+func CompilePattern(flag, anchor, pattern string) (*regexp.Regexp, error)
 ```
 
 ### 3.1 Why this shape
@@ -182,8 +210,10 @@ fixture covers the move path — swapping `os.Rename`'s arguments fails `TestEng
 **Fixed — the conflict banner was built out of an enum's `String()`.** The CLI printed
 `"WARNING! %sing %s ..."` from `Action.String()`, which made `"stow"` a load-bearing
 *spelling* of `ActionStow`: renaming the Stringer would silently move parity-pinned bytes.
-The gerund now lives in `internal/cli`, where the words gostow prints belong, and
-`Action.String()` documents that it is for diagnostics only.
+The gerund became its own table, and `Action.String()` documents that it is for diagnostics
+only. (It first lived in `internal/cli`. The 2026-07-10 audit then found that the *engine*
+needs the same word for `Stow.pm`'s level-2 `CONFLICT when stowing …` line, so a second copy
+would have appeared. It is now `stow.Gerund`, exported and used by both — see below.)
 
 **Left alone — `Task.Action` and `Conflict.Action` are different types sharing a name.**
 One is create/remove/move, the other stow/unstow/restow. `Stow.pm` calls both `action`, Go's
@@ -194,6 +224,30 @@ for a problem the compiler already solves.
 serve dstow better, but the message text is dictated by parity and the engine is the only
 thing that knows enough to produce it. Revisit when dstow has a concrete need; adding a
 structured field later is backwards-compatible, changing `Message`'s meaning is not.
+
+### 3.4 API additions from the 2026-07-10 audit
+
+Four names were added, all of them to *stop* a duplication rather than to widen the surface.
+Each is frozen by a `v1` tag, so each is justified here.
+
+**`Gerund(Action) string`.** `Stow.pm` interpolates `"${action}ing"` into two different
+outputs: `conflict()`'s level-2 debug line, which the engine emits, and `bin/stow`'s conflict
+banner, which the CLI emits. One word, two packages, and the engine cannot import
+`internal/cli`. Exported so there is one table. dstow, which prints its own conflict
+summaries, wants it too.
+
+**`IgnoreAnchor`, `PrefixAnchor`, `CompilePattern`.** `bin/stow` compiles
+`--ignore`/`--defer`/`--override` inside its `Getopt::Long` callbacks, so an uncompilable
+pattern is a *parse* failure (PL-20). To reproduce that timing, `internal/cli` must compile
+the anchored pattern while parsing — and the anchors live in the engine, which compiles them
+again for a library consumer who never went through the CLI. The alternative was a second
+transcription of `qr{($regex)\z}`, which is precisely the shape that produced the `parent`
+bug.
+
+**`FatalError`** was always exported and was simply missing from §3's listing above.
+
+**Not exported:** `TaskAction.name()`, the word `Stow.pm` stores in `$task->{action}`. It is
+parity-pinned, unlike `Action.String()`, and nothing outside the engine prints it.
 
 ---
 
@@ -224,7 +278,8 @@ compatible parser in `internal/getopt`.
 | the invalid-integer wording is **not stow's** | `(integer number expected)` since Getopt::Long 2.55; `(number expected)` before it | **[probed]** — ledger PL-19 |
 
 `internal/getopt` is validated by driving real `Getopt::Long`, configured exactly
-as stow configures it, over 6307 generated argv vectors and comparing the resulting
+as stow configures it, over several thousand generated argv vectors (the test prints how
+many) and comparing the resulting
 options hash, both package lists, the leftover array and every diagnostic
 (`go test -tags oracle ./internal/getopt/`).
 
@@ -337,7 +392,7 @@ reproducing that is not fidelity; it is a defect, and a discourteous one.
 > every existing script, config, flag, and option behaves identically
 
 Help prose is not a script, a config, a flag, or an option. **Option parsing is**, and it
-remains byte-exact — pinned by 6307 argv vectors against real `Getopt::Long` (§4.1). No
+remains byte-exact — pinned by the argv-vector sweep against real `Getopt::Long` (§4.1). No
 command line GNU Stow accepts is parsed differently by gostow, and no output a script reads
 has changed. The usage *diagnostic* on stderr and the exit code stay byte-exact too; only
 the help block dumped alongside them on stdout is gostow's.
@@ -606,6 +661,16 @@ All operations aborted.
 ```
 
 where `<action>` ∈ {`stow`, `unstow`} — yielding the literal words `stowing` / `unstowing`.
+`stow.Gerund` is that word; `Stow.pm` builds it by interpolating `"${action}ing"`.
+
+The **same interpolation** appears at verbosity ≥2, once per conflict, the moment it is
+recorded (`Stow.pm`'s `conflict()` opens with `debug(2, 0, ...)`). It is inside the
+byte-exact contract, and gostow omitted it entirely until the 2026-07-10 audit: **[probed]**
+
+```
+CONFLICT when stowing <package>: <message>
+```
+
 Conflict `<message>` values:
 
 ```
@@ -624,6 +689,27 @@ Fatal errors come in **two shapes**, and the difference is visible:
   program-name prefix at all**. **[probed]**
 
 Both are pinned to exit 2 in gostow (PL-07); both message forms are replicated verbatim.
+
+**Errno interpolation.** Several fatal messages end `(%s)` filled from Perl's `$!` — the C
+library's `strerror` for the errno, capitalised: `cannot read directory: ../stow/pkg/sub
+(Permission denied)`. **[probed]** Go's error for the same failure is `open /abs/path/...:
+permission denied`: it names the syscall, and repeats the path *absolutely*, inside a message
+whose other path is target-relative. `errnoText` extracts the `syscall.Errno` and capitalises
+the first rune of its string — Go's per-errno strings come from the same table as `strerror`
+and differ only in case, which also keeps this correct off glibc. Pinned against Perl's own
+`$!` rather than a hand-written table.
+
+**`canon_path` is fatal before any planning.** `Stow::Util::canon_path` canonicalises by
+`chdir`ing into the path and calling `getcwd`, and `die`s when it cannot. A `--dir` or
+`--target` that exists but lacks its **search bit** therefore kills stow at every verbosity,
+**including under `-n`**: **[probed]**
+
+```
+stow: ERROR: canon_path: cannot chdir to <path as given> from <cwd>
+```
+
+gostow reproduces the check with `os.Stat("<resolved>/.")`, which needs exactly the search
+permission `chdir` needs and not the read permission `open` would.
 
 Usage errors: `stow: <message>` on stderr followed by a **blank line**, then the full usage
 block on **stdout**. A parse failure calls `usage('')`: the empty message prints nothing, but
@@ -854,10 +940,17 @@ See PL-15 for the `$`-vs-newline divergence.
 
 ## 12. Open items
 
-All ledger items are now ruled. What remains:
+All ledger items are now ruled — PL-01 … PL-22. Every slice in `TEST-PLAN.md` §5 is
+implemented, and each is pinned by a differential test against the pinned oracle.
 
-Nothing. Every ledger item is ruled, every slice in `TEST-PLAN.md` §5 is implemented, and
-each is pinned by a differential test against the pinned oracle.
+What remains before a `v1` tag:
+
+- **Ten upstream bug reports**, unwritten: PL-01, PL-03, PL-04, PL-05, PL-06, PL-08, PL-09,
+  PL-10, PL-18, PL-21. The worst is PL-18: a `$HOME` containing a regex metacharacter makes
+  real stow unusable.
+- **`--adopt` across a filesystem boundary** (`EXDEV`) has no fixture. `os.Rename` and Perl's
+  `rename` both fail with it, so parity of the *event* is likely and the *message* is now
+  covered by the errno work — but neither suite proves it. It needs two mount points.
 
 What that claim does **not** mean: parity is evidenced, not proved. The suite compares argv
 vectors against real `Getopt::Long`, ignore verdicts against `Stow.pm`'s own `ignore()`,

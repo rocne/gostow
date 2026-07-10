@@ -182,22 +182,37 @@ $ go build ./... && go vet ./... && go test ./...   # hermetic: no Perl required
 $ golangci-lint run ./...
 ```
 
+The hermetic suite is not a weaker suite. It replays the differential fixtures against frozen
+recordings of what real stow 2.4.1 did — stdout, stderr, exit code and the resulting tree.
+
 The specification is **[docs/SPEC.md](docs/SPEC.md)**, and it is executable: GNU Stow 2.4.1
 is the conformance referent, and where the spec and the real binary disagree, the binary
 wins. Install the pinned oracle and run the differential suite with:
 
 ```console
 $ PREFIX=$PWD/.oracle bash test/install-stow-oracle.sh
-$ PATH=$PWD/.oracle/bin:$PATH go test -tags oracle ./...
+$ PATH=$PWD/.oracle/bin:$PATH go test -count=1 -tags oracle ./...
 ```
 
-That compares 6307 argv vectors against real `Getopt::Long`, 1216 ignore verdicts against
-`Stow.pm`'s own `ignore()`, and 62 differential fixtures — 20 engine-level, 42 driving the
-whole binary — against real stow 2.4.1. Do **not** `apt install stow`: Ubuntu 24.04 ships
-2.3.1, which would silently redefine the spec.
+That compares argv vectors against real `Getopt::Long`, ignore verdicts against `Stow.pm`'s
+own `ignore()`, `parent` and `join_paths` against `Stow::Util`, errno strings against Perl's
+`$!`, and whole-invocation fixtures against the real binary. Every one of those tests prints
+its own count — read it there, not here.
+
+`-count=1` is not optional: the harness reaches its oracles through subprocesses, and Go's
+test cache cannot see a subprocess's inputs. Do **not** `apt install stow` either: Ubuntu
+24.04 ships 2.3.1, which would silently redefine the spec.
+
+Regenerate the frozen recordings after a deliberate change:
+
+```console
+$ PATH=$PWD/.oracle/bin:$PATH go test -count=1 -tags oracle ./internal/conformance/ -update-goldens
+```
 
 `docs/SPEC.md` §10 is the **Parity Ledger** — every quirk found in stow's source, whether it
-is a contract or a bug, and what gostow does about it. Nine of them are bugs owed upstream.
+is a contract or a bug, and what gostow does about it. Ten of them are bugs owed upstream.
+`docs/audit-2026-07-10.md` is an external audit of this codebase; six of its findings were
+parity bugs, and all six are fixed.
 
 ## Status
 
