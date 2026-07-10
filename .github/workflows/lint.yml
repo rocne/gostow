@@ -19,3 +19,8 @@ jobs:
       - uses: golangci/golangci-lint-action@v9
         with:
           version: "v2.11.4"
+
+      # install.sh is piped into `sh` from the internet; a bug in it runs on a
+      # stranger's machine. shellcheck is preinstalled on the ubuntu runner.
+      - name: Shellcheck install.sh
+        run: shellcheck install.sh
