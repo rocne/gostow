@@ -28,8 +28,8 @@ reproduce any of them, ever, with or without flags.
 There are also three differences that are not bugs being fixed:
 
 - **`gostow --version` reports gostow's version**, naming the stow release it clones:
-  `gostow 0.1.0 (GNU Stow 2.4.1 compatible)`. Reporting `2.4.1` for a binary released
-  as `0.1.0` would be theatre.
+  `gostow 0.1.1 (GNU Stow 2.4.1 compatible)`. Reporting `2.4.1` for a binary released
+  as `0.1.1` would be theatre.
 
 - **`gostow --help` is written in gostow's own words.** It documents the same options,
   with the same names and the same meanings, and it also documents `--no-folding` —

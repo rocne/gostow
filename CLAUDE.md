@@ -139,17 +139,24 @@ old `t.Skip` made the whole differential suite print `ok` in 0.26s instead of 5.
 ## Versioning — gostow stays pre-1.0
 
 **A `v1` tag is a promise of stow parity we have not earned.** Until the engine is
-complete, every release is `v0.x`. Four layers enforce this; don't weaken any of
-them without a deliberate decision:
+complete, every release is `v0.x`. Don't weaken any of these without a deliberate
+decision:
 
-- `initial-version: 0.1.0` in `release-please-config.json`. Without it release-please
-  proposes **1.0.0** on a first release — `bump-minor-pre-major` does not prevent this,
-  because the initial-release path never bumps anything.
+- `bump-minor-pre-major: true` in `release-please-config.json`. Below 1.0.0 a breaking
+  change bumps the **minor**, so ordinary commit traffic can never cross the line.
 - `guard-release-pr` in `release-please.yml`. `ci.yml`'s `version-guard` **cannot** see
   release-please's own PR: GitHub never triggers `pull_request` workflows for
   `GITHUB_TOKEN`-authored PRs.
 - `version-guard` in `ci.yml`, for human PRs touching the manifest.
 - `guard-pre-1-0` in both release workflows — the hard stop before anything is published.
+
+`initial-version: 0.1.0` is **spent.** It governs only the *first* release, and without it
+release-please would have proposed 1.0.0 for that one — `bump-minor-pre-major` does not
+prevent it, because the initial-release path never bumps anything. `v0.1.0` shipped on
+2026-07-09, so that path is closed forever; the setting stays as a record of why, not as a
+guard. The corollary: **reaching 1.0.0 now takes a deliberate act** — a `Release-As: 1.0.0`
+footer, or dropping `bump-minor-pre-major` plus a breaking commit. PR #13 was written
+against the old lever and needs rewriting.
 
 ## Commit and Push Cadence
 
@@ -173,9 +180,11 @@ Defer `.claude/docs/gostow-dstow-concept-2026-07-09.md` (design capture, carried
 from dot-dagger) until the task needs it — `docs/SPEC.md` supersedes it on anything
 concrete.
 
-### Current state (2026-07-09)
+### Current state (2026-07-10)
 
-Release pipeline is live and green. **The engine and CLI are implemented.** `gostow`
+**`v0.1.1` is released and published** — tag, GitHub release, Cloudsmith `.deb`/`.rpm`,
+Homebrew cask, sigstore attestation. It carries every fix from the 2026-07-10 audit. The
+release pipeline is live and green, and **the engine and CLI are implemented**: `gostow`
 stows, unstows, restows, folds, unfolds and refolds; parses `.stowrc`; honours the
 ignore lists; and reports conflicts and exit codes.
 
@@ -258,5 +267,4 @@ Still owed before v1:
 protection asymmetry are both pinned by differential fixtures. `ignore.t` is settled without
 porting it: `Stow.pm`'s own `ignore()` is the oracle.
 
-**Do not tag v1 without a human decision.** The four pre-1.0 guards stay standing until
-then; release-please's standing PR (#2) is deliberately left open.
+**Do not tag v1 without a human decision.** The pre-1.0 guards stay standing until then.
