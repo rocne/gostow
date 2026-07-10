@@ -81,7 +81,10 @@ func AssertSameAsOracle(t *testing.T, c Case) {
 	case oRun.Stdout != gRun.Stdout:
 		t.Errorf("stdout mismatch for %q\noracle:\n%s\ngostow:\n%s", c.Name, oRun.Stdout, gRun.Stdout)
 	}
-	if oRun.Stderr != gRun.Stderr {
+	switch {
+	case c.DiagnosticLinesOnly:
+		assertSameDiagnosticCount(t, c, oRun.Stderr, gRun.Stderr)
+	case oRun.Stderr != gRun.Stderr:
 		t.Errorf("stderr mismatch for %q\noracle:\n%s\ngostow:\n%s", c.Name, oRun.Stderr, gRun.Stderr)
 	}
 	switch {
@@ -94,6 +97,32 @@ func AssertSameAsOracle(t *testing.T, c Case) {
 	}
 	if oRun.Tree != gRun.Tree {
 		t.Errorf("tree mismatch for %q\noracle:\n%s\ngostow:\n%s", c.Name, oRun.Tree, gRun.Tree)
+	}
+}
+
+// assertSameDiagnosticCount requires both binaries to have complained the same
+// number of times, and at least once. The wording is Perl's; the count is the
+// behaviour — Getopt::Long catches each callback's die and carries on, so two bad
+// patterns produce two diagnostics.
+func assertSameDiagnosticCount(t *testing.T, c Case, oracleErr, gostowErr string) {
+	t.Helper()
+
+	count := func(s string) int {
+		n := 0
+		for _, line := range strings.Split(s, "\n") {
+			if strings.TrimSpace(line) != "" {
+				n++
+			}
+		}
+		return n
+	}
+	o, g := count(oracleErr), count(gostowErr)
+	if o == 0 {
+		t.Fatalf("%q: the oracle printed no diagnostic; the check below would be vacuous", c.Name)
+	}
+	if o != g {
+		t.Errorf("%q: oracle printed %d diagnostic line(s), gostow printed %d\noracle:\n%s\ngostow:\n%s",
+			c.Name, o, g, oracleErr, gostowErr)
 	}
 }
 

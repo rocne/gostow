@@ -227,6 +227,16 @@ func expandTilde(path string) string {
 			}
 			return m
 		}
+		// An unknown user leaves the token alone, which the caller's "is not a
+		// valid directory" check then rejects.
+		//
+		// stow does not. Perl's (getpwnam($1))[7] is undef, it interpolates as the
+		// empty string, and `--target=~nosuchuser/tmp/x` becomes `/tmp/x` — a
+		// directory the user never named, which stow will happily build a symlink
+		// farm inside, exit 0, with nothing but a `Use of uninitialized value`
+		// warning to show for it. That is an uninitialized value reaching a
+		// filesystem operation, so it is a bug rather than behaviour, and the
+		// parity mandate exempts stow's bugs. Ledger PL-21; owed upstream.
 		if u, err := user.Lookup(name); err == nil {
 			return u.HomeDir
 		}

@@ -45,6 +45,16 @@ type Case struct {
 	// gostow is required to exit 2.
 	FatalExitDiverges bool
 
+	// DiagnosticLinesOnly marks a case whose stderr diagnostic is produced by
+	// Perl's own regex engine, quoting bin/stow's line numbers — text gostow
+	// cannot reproduce and should not try to. Everything else about the case is
+	// still pinned: the exit code, the tree, the help block on stdout, and the
+	// *number* of diagnostic lines, which is one per bad pattern and is how a
+	// silently-swallowed second pattern would be caught. See SPEC §10, PL-20.
+	//
+	// Both binaries must print at least one line, or the check is vacuous.
+	DiagnosticLinesOnly bool
+
 	// UsageOnStdout marks a case where the whole help block lands on stdout —
 	// every usage error does this. gostow's help is written in gostow's own words
 	// (SPEC §4.5), so the two blocks differ by design. stderr, the exit code and

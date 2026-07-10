@@ -371,6 +371,73 @@ func TestCLIAgainstOracle(t *testing.T) {
 			Args:              args("pkg"),
 			FatalExitDiverges: true,
 		},
+
+		// --- an uncompilable regex is a *parse* failure -----------------------
+		//
+		// bin/stow compiles --ignore/--defer/--override inside their Getopt::Long
+		// callbacks, so a bad pattern is diagnosed while parsing: message on
+		// stderr, usage on stdout, exit 1. gostow used to compile in newEngine,
+		// which is after .stowrc, after --dir validation, and after the "No
+		// packages" check — so with no packages the bad pattern went unnoticed.
+		//
+		// The diagnostic's text is Perl's regex engine quoting bin/stow's line
+		// numbers, so DiagnosticLinesOnly compares how many times each binary
+		// complained rather than what it said. See SPEC §10, PL-20.
+		{
+			Name:                "an uncompilable --ignore is a parse failure",
+			Stow:                Tree{"pkg/f": F("x")},
+			Args:                args("--ignore=(", "pkg"),
+			UsageOnStdout:       true,
+			DiagnosticLinesOnly: true,
+		},
+		{
+			Name:                "an uncompilable --ignore is noticed even with no packages",
+			Stow:                Tree{"pkg/f": F("x")},
+			Args:                args("--ignore=("),
+			UsageOnStdout:       true,
+			DiagnosticLinesOnly: true,
+		},
+		{
+			Name:                "an uncompilable --defer is noticed before an invalid --dir",
+			Stow:                Tree{"pkg/f": F("x")},
+			Args:                []string{"-d", "nosuchdir", "-t", "target", "--defer=[", "pkg"},
+			UsageOnStdout:       true,
+			DiagnosticLinesOnly: true,
+		},
+		{
+			// Getopt::Long catches each callback's die and keeps parsing, so two
+			// bad patterns yield two diagnostics. A gostow that stopped at the
+			// first would still exit 1, and would fail here.
+			Name:                "two uncompilable patterns produce two diagnostics",
+			Stow:                Tree{"pkg/f": F("x")},
+			Args:                args("--ignore=(", "--override=[", "pkg"),
+			UsageOnStdout:       true,
+			DiagnosticLinesOnly: true,
+		},
+		{
+			// The anchor is part of what stow compiles, so a pattern can be
+			// rejected for what the anchor makes of it. "*" is not a valid regex
+			// under either anchor.
+			Name:                "a pattern invalid once anchored is rejected",
+			Stow:                Tree{"pkg/f": F("x")},
+			Args:                args("--ignore=*", "pkg"),
+			UsageOnStdout:       true,
+			DiagnosticLinesOnly: true,
+		},
+		{
+			// "--ignore=" is a missing argument to Getopt::Long, not an empty
+			// pattern, so the validator must never see it. Audit item U3.
+			Name:          "an empty --ignore value is a missing argument",
+			Stow:          Tree{"pkg/f": F("x")},
+			Args:          args("--ignore=", "pkg"),
+			UsageOnStdout: true,
+		},
+		{
+			Name: "a valid --defer still reaches the engine",
+			Stow: Tree{"one/f": F("1"), "two/f": F("2")},
+			Pre:  []string{"-d", "stow", "-t", "target", "one"},
+			Args: args("-v", "--defer=f", "two"),
+		},
 	}
 
 	for _, c := range cases {

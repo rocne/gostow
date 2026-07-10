@@ -210,26 +210,51 @@ func newEngine(opts Options) (*engine, error) {
 	e.debug(2, 0, "stow dir is %s", dir)
 	e.debug(2, 0, "stow dir path relative to target %s is %s", target, e.stowPath)
 
-	// --ignore is a suffix match, --defer and --override are prefix matches.
-	// Perl's \z and \A are Go's $ and ^ so long as no (?m) flag is set.
-	if e.ignoreRE, err = compileAll(opts.Ignore, "(%s)$"); err != nil {
+	// --ignore is a suffix match, --defer and --override are prefix matches. The
+	// CLI has already rejected an uncompilable pattern at parse time; a library
+	// consumer has not, so these still check.
+	if e.ignoreRE, err = compileAll("ignore", opts.Ignore, IgnoreAnchor); err != nil {
 		return nil, err
 	}
-	if e.deferRE, err = compileAll(opts.Defer, "^(%s)"); err != nil {
+	if e.deferRE, err = compileAll("defer", opts.Defer, PrefixAnchor); err != nil {
 		return nil, err
 	}
-	if e.overrideRE, err = compileAll(opts.Override, "^(%s)"); err != nil {
+	if e.overrideRE, err = compileAll("override", opts.Override, PrefixAnchor); err != nil {
 		return nil, err
 	}
 	return e, nil
 }
 
-func compileAll(sources []string, anchor string) ([]*regexp.Regexp, error) {
+// The anchors bin/stow wraps around its three regex options, inside the
+// Getopt::Long callbacks that compile them: qr{($regex)\z} for --ignore, and
+// qr{\A($regex)} for --defer and --override. Perl's \z and \A are Go's $ and ^
+// so long as no (?m) flag is set.
+//
+// They are exported because the anchor decides whether a pattern compiles at all,
+// and the CLI must reject a bad pattern at parse time, exactly where stow does.
+// Transcribing "(%s)$" a second time in internal/cli is how the parent bug was
+// born.
+const (
+	IgnoreAnchor = "(%s)$"
+	PrefixAnchor = "^(%s)"
+)
+
+// CompilePattern compiles one --ignore/--defer/--override pattern under its
+// anchor. flag is the option's name, for the diagnostic.
+func CompilePattern(flag, anchor, pattern string) (*regexp.Regexp, error) {
+	re, err := regexp.Compile(fmt.Sprintf(anchor, pattern))
+	if err != nil {
+		return nil, fatalf("Invalid --%s regex %q: %v", flag, pattern, err)
+	}
+	return re, nil
+}
+
+func compileAll(flag string, sources []string, anchor string) ([]*regexp.Regexp, error) {
 	var out []*regexp.Regexp
 	for _, s := range sources {
-		re, err := regexp.Compile(fmt.Sprintf(anchor, s))
+		re, err := CompilePattern(flag, anchor, s)
 		if err != nil {
-			return nil, fatalf("invalid regex %q: %v", s, err)
+			return nil, err
 		}
 		out = append(out, re)
 	}
