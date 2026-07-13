@@ -56,6 +56,13 @@ type Options struct {
 	Override  []string
 	Log       io.Writer // nil means io.Discard; the CLI passes os.Stderr
 
+	// NoGlobalIgnoreFile suppresses the implicit read of $HOME/.stow-global-ignore.
+	// The zero value preserves stow-parity behaviour (the file is read); it exists
+	// for a library consumer whose stance is that the caller owns all
+	// configuration, so a stray file in the invoking user's home must not silently
+	// change engine behaviour. The CLI never sets it.
+	NoGlobalIgnoreFile bool
+
 	// FixQuirks abandons byte-and-behaviour parity with GNU Stow in the small,
 	// enumerated set of places where stow's behaviour is a defect rather than a
 	// contract. It is off by default, because gostow's promise is to *be* stow.
@@ -81,6 +88,57 @@ type Conflict struct {
 	Action  Action
 	Package string
 	Message string
+
+	// Path and Kind expose, structurally, what Message states in prose. Message
+	// stays byte-identical to stow's wording (it is parity-pinned); Path and Kind
+	// are additive, for a library consumer that would otherwise have to parse the
+	// message to recover the occupied path and the occupant's classification.
+	//
+	// Path is the target-relative path in conflict, named the way stow names every
+	// path it prints. Kind classifies the occupant. Both are populated at every
+	// conflict site the engine raises.
+	Path string
+	Kind ConflictKind
+}
+
+// ConflictKind is a machine-readable classification of a Conflict, recovered
+// from the conflict site rather than from Message's wording. The zero value is
+// never produced by the engine; every conflict carries one of the named kinds.
+type ConflictKind int
+
+const (
+	// ConflictExistingFile is a real file (or other non-link, non-directory node)
+	// where a link belongs. It is the adoptable case: --adopt would import it.
+	ConflictExistingFile ConflictKind = iota + 1
+	// ConflictDirMismatch is a non-directory over an existing directory, or a
+	// directory over an existing non-directory.
+	ConflictDirMismatch
+	// ConflictForeignLink is an existing symlink owned by no stow package.
+	ConflictForeignLink
+	// ConflictOtherPackage is an existing symlink owned by a different package.
+	ConflictOtherPackage
+	// ConflictSourceAbsolute is a package node that is itself an absolute symlink,
+	// which stow cannot represent as a relative link and so refuses.
+	ConflictSourceAbsolute
+)
+
+// String names the kind for diagnostics and %v. Not parity-pinned: ConflictKind
+// is a new, additive type, so this may be renamed freely.
+func (k ConflictKind) String() string {
+	switch k {
+	case ConflictExistingFile:
+		return "existing-file"
+	case ConflictDirMismatch:
+		return "dir-mismatch"
+	case ConflictForeignLink:
+		return "foreign-link"
+	case ConflictOtherPackage:
+		return "other-package"
+	case ConflictSourceAbsolute:
+		return "source-absolute"
+	default:
+		return fmt.Sprintf("ConflictKind(%d)", int(k))
+	}
 }
 
 // ConflictError is returned when planning found any conflict. Nothing was
@@ -323,13 +381,15 @@ func Gerund(a Action) string {
 	}
 }
 
-func (e *engine) conflict(action Action, pkg, format string, args ...any) {
+func (e *engine) conflict(action Action, pkg, path string, kind ConflictKind, format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	e.debug(2, 0, "CONFLICT when %s %s: %s", Gerund(action), pkg, msg)
 	e.conflicts = append(e.conflicts, Conflict{
 		Action:  action,
 		Package: pkg,
 		Message: msg,
+		Path:    path,
+		Kind:    kind,
 	})
 }
 
@@ -495,7 +555,8 @@ func (e *engine) stowNode(stowPath, pkg, pkgSubpath, targetSubpath string) error
 			return fatalf("Could not read link: %s (%s)", pkgPath, errnoText(err))
 		}
 		if strings.HasPrefix(dest, "/") {
-			e.conflict(ActionStow, pkg, "source is an absolute symlink %s => %s", pkgPath, dest)
+			e.conflict(ActionStow, pkg, targetSubpath, ConflictSourceAbsolute,
+				"source is an absolute symlink %s => %s", pkgPath, dest)
 			return nil
 		}
 	}
@@ -513,20 +574,20 @@ func (e *engine) stowNode(stowPath, pkg, pkgSubpath, targetSubpath string) error
 		e.debug(4, 1, "Evaluate existing node: %s", targetSubpath)
 		if e.isADir(targetSubpath) {
 			if !e.dirExists(pkgPath) {
-				e.conflict(ActionStow, pkg,
+				e.conflict(ActionStow, pkg, targetSubpath, ConflictDirMismatch,
 					"cannot stow non-directory %s over existing directory target %s", pkgPath, targetSubpath)
 				return nil
 			}
 			return e.stowContents(e.stowPath, pkg, pkgSubpath, targetSubpath)
 		}
 		if !e.opts.Adopt {
-			e.conflict(ActionStow, pkg,
+			e.conflict(ActionStow, pkg, targetSubpath, ConflictExistingFile,
 				"cannot stow %s over existing target %s since neither a link nor a directory and --adopt not specified",
 				pkgPath, targetSubpath)
 			return nil
 		}
 		if e.dirExists(pkgPath) {
-			e.conflict(ActionStow, pkg,
+			e.conflict(ActionStow, pkg, targetSubpath, ConflictDirMismatch,
 				"cannot stow directory %s over existing non-directory target %s", pkgPath, targetSubpath)
 			return nil
 		}
@@ -559,7 +620,8 @@ func (e *engine) stowOverExistingLink(stowPath, pkg, pkgSubpath, targetSubpath, 
 
 	existingPkgPath, existingStowPath, existingPackage := e.findStowedPath(targetSubpath, existingLinkDest)
 	if existingPkgPath == "" {
-		e.conflict(ActionStow, pkg, "existing target is not owned by stow: %s", targetSubpath)
+		e.conflict(ActionStow, pkg, targetSubpath, ConflictForeignLink,
+			"existing target is not owned by stow: %s", targetSubpath)
 		return nil
 	}
 
@@ -602,7 +664,7 @@ func (e *engine) stowOverExistingLink(stowPath, pkg, pkgSubpath, targetSubpath, 
 		return e.stowContents(e.stowPath, pkg, pkgSubpath, targetSubpath)
 
 	default:
-		e.conflict(ActionStow, pkg,
+		e.conflict(ActionStow, pkg, targetSubpath, ConflictOtherPackage,
 			"existing target is stowed to a different package: %s => %s", targetSubpath, existingLinkDest)
 	}
 	return nil

@@ -45,6 +45,30 @@ _darcs
 ^/COPYING
 `
 
+// DefaultIgnores returns the built-in ignore pattern list — stow's compiled-in
+// __DATA__ defaults, parsed exactly as the engine parses them, including the
+// self-ignoring `^/\.stow-local-ignore$` rule stow always appends.
+//
+// It exists for a consumer that resolves its own ignore chain and needs to
+// re-apply this built-in floor additively: stow's file semantics are
+// replacement, so the first .stow-local-ignore or .stow-global-ignore that
+// exists discards these defaults, and a consumer that wants them back cannot
+// otherwise obtain the list without hardcoding a second copy of the patterns.
+//
+// The patterns are returned as stow writes them — Perl regex fragments, split
+// into basename and path forms by whether they contain a "/" (see
+// compileIgnorePatterns). They are not anchored the way --ignore patterns are;
+// a caller feeding them through Options.Ignore must account for that difference.
+// Each call returns a fresh slice.
+func DefaultIgnores() []string {
+	// defaultIgnoreData is a compiled-in string, so the reader cannot fail.
+	patterns, err := parseIgnoreReader(strings.NewReader(defaultIgnoreData))
+	if err != nil {
+		panic("stow: built-in ignore data failed to parse: " + err.Error())
+	}
+	return patterns
+}
+
 // ignoreList is one compiled ignore source. Either regexp may be nil, meaning
 // that source contributed no patterns of that kind.
 type ignoreList struct {
@@ -90,10 +114,15 @@ func (e *engine) ignore(stowPath, pkg, target string) (bool, error) {
 // ignoreRegexps resolves the three exclusive sources for one package directory,
 // memoizing per file path for the lifetime of the engine as stow does.
 func (e *engine) ignoreRegexps(packageDir string) (*ignoreList, error) {
-	local := joinPaths(packageDir, localIgnoreFile)
-	global := joinPaths(os.Getenv("HOME"), globalIgnoreFile)
+	files := []string{joinPaths(packageDir, localIgnoreFile)}
+	// The three file-based sources are exclusive, so suppressing the global file
+	// means an absent local file falls straight through to the built-in defaults,
+	// exactly as if $HOME/.stow-global-ignore did not exist.
+	if !e.opts.NoGlobalIgnoreFile {
+		files = append(files, joinPaths(os.Getenv("HOME"), globalIgnoreFile))
+	}
 
-	for _, file := range []string{local, global} {
+	for _, file := range files {
 		if !e.existsPath(file) {
 			continue
 		}
