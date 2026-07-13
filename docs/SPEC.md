@@ -109,6 +109,8 @@ type Options struct {
     Override  []string
     Log       io.Writer // nil => io.Discard. The CLI passes os.Stderr.
     FixQuirks bool      // fix stow's defects instead of matching them; see §8.36
+
+    NoGlobalIgnoreFile bool // suppress the implicit $HOME/.stow-global-ignore read; see §3.5
 }
 
 // Apply is the deep entry point. It plans every request, detects all conflicts
@@ -137,8 +139,19 @@ type Task struct {
 type Conflict struct {
     Action  Action // the action being planned when the conflict arose
     Package string
-    Message string // byte-exact stow wording; see §8.3
+    Message string       // byte-exact stow wording; see §8.3
+    Path    string       // target-relative path in conflict; see §3.5
+    Kind    ConflictKind  // machine-readable occupant classification; see §3.5
 }
+
+type ConflictKind int
+const (
+    ConflictExistingFile ConflictKind = iota + 1 // real file where a link belongs (adoptable)
+    ConflictDirMismatch                          // non-dir over dir, or dir over non-dir
+    ConflictForeignLink                          // symlink owned by no package
+    ConflictOtherPackage                         // symlink owned by a different package
+    ConflictSourceAbsolute                       // package node is itself an absolute symlink
+)
 
 // ConflictError is returned when planning found any conflict. Nothing was written.
 type ConflictError struct{ Conflicts []Conflict }
@@ -169,6 +182,19 @@ const (
 // CompilePattern compiles one --ignore/--defer/--override pattern under its
 // anchor. flag names the option, for the diagnostic.
 func CompilePattern(flag, anchor, pattern string) (*regexp.Regexp, error)
+
+// Introspection affordances for a library consumer (dstow). Additive; no CLI
+// path reaches them, and they move no parity-pinned byte. See §3.5.
+
+// Owner reports whether the symlink at path is owned by stow dir, and which package.
+func Owner(dir, path string) (pkg string, owned bool, err error)
+
+// Expected computes the links stowing pkg would create into an empty target:
+// target-relative link path => package-relative source. The target is never read.
+func Expected(opts Options, pkg string) (map[string]string, error)
+
+// DefaultIgnores returns stow's built-in default ignore patterns.
+func DefaultIgnores() []string
 ```
 
 ### 3.1 Why this shape
@@ -224,6 +250,8 @@ for a problem the compiler already solves.
 serve dstow better, but the message text is dictated by parity and the engine is the only
 thing that knows enough to produce it. Revisit when dstow has a concrete need; adding a
 structured field later is backwards-compatible, changing `Message`'s meaning is not.
+*(Revisited: dstow's audit brought that concrete need. `Conflict.Path` and `Conflict.Kind`
+were added — additively, with `Message` byte-identical — in §3.5.)*
 
 ### 3.4 API additions from the 2026-07-10 audit
 
@@ -248,6 +276,56 @@ bug.
 
 **Not exported:** `TaskAction.name()`, the word `Stow.pm` stores in `$task->{action}`. It is
 parity-pinned, unlike `Action.String()`, and nothing outside the engine prints it.
+
+### 3.5 API additions from dstow's 2026-07-12 audit
+
+dstow (gostow's first library consumer) audited the engine and found four capabilities it
+needed that already existed inside the engine, fully worked out, but unexported. All four
+additions are **purely additive** — no CLI path reaches them, default behaviour is unchanged,
+and the differential suite is untouched — so the parity mandate is not engaged. Each is frozen
+by a `v1` tag, so each is justified here. The guiding rule was **do not let dstow re-implement
+a pinned semantic**: a second copy of relative-link resolution, fold rules, or the ignore
+defaults that drifted from the engine's is the class of bug a symlink manager can least afford.
+
+**`Conflict.Path`, `Conflict.Kind` (+ `ConflictKind`).** The engine had the occupied path and
+the occupant's classification in hand at every conflict site, then erased both into the prose
+of `Message`. dstow's status view needs them structurally — a real file names the `--adopt`
+remedy, a foreign link names another. Both fields are populated at the existing sites;
+`Message` stays byte-identical, so §8.3 and the parity fixtures are untouched. `Kind`'s zero
+value is never produced. This is the revisit §3.3 deferred.
+
+**`Owner(dir, path)`.** Wraps the engine's `findStowedPath` — link-ownership introspection with
+stow's exact relative-link resolution and `.stow`-marker support — for dstow's status
+attribution (a link into *another* repo's same-named package must not count as stowed here) and
+its link-ledger rebuild. Reusing the engine's routine is the whole point: a 30-line
+reimplementation in dstow would be a second, drifting source of truth.
+
+**`Expected(opts, pkg)`.** The plan-only entry point. It walks the package under the given
+options and returns the link set stowing would create **into an empty target** —
+target-relative link path ⇒ package-relative source — without reading the target tree. It is
+the load-bearing gap: `Simulate` returns a *delta against current disk* (an already-correct
+link, or a fold that still satisfies the package under a changed `Fold`, yields no task), so
+none of dstow's expected-vs-actual features (status, the drift marker, orphan classification,
+adopt-candidate enumeration) are derivable from it. Folding is resolved as if the target were
+empty; comparing the fold-on and fold-off expected sets is how dstow detects fold drift. A
+package node that is an absolute symlink yields no entry, matching stow's refusal to represent
+one. Bound to the real engine by a hermetic test: stowing into an empty target must create
+exactly the links `Expected` predicts.
+
+**`DefaultIgnores()` and `Options.NoGlobalIgnoreFile`.** dstow resolves its own additive
+ignore chain (package → repo → global → built-in) and feeds the result through
+`Options.Ignore`. Two seams blocked it. First, stow's file semantics are *replacement*: the
+first `.stow-local-ignore`/`.stow-global-ignore` that exists discards the built-in defaults, so
+a consumer that wants the built-in floor back additively could not obtain the list without
+hardcoding a second copy of the patterns — `DefaultIgnores()` returns it. Second,
+`$HOME/.stow-global-ignore` was read implicitly and could not be disabled per call, so a stray
+file in the invoking user's home silently changed library behaviour — `NoGlobalIgnoreFile`
+suppresses that read. Both default to stow-parity behaviour.
+
+*One asymmetry noted, no API owed (a doc, if anywhere): `Options.Ignore` patterns are
+suffix-anchored against the whole target path (`IgnoreAnchor`), while ignore-**file** patterns
+get stow's segment/path split with different anchoring (`compileIgnorePatterns`). A consumer
+translating between the two channels — as dstow does — must account for it.*
 
 ---
 
