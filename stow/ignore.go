@@ -111,6 +111,27 @@ func (e *engine) ignore(stowPath, pkg, target string) (bool, error) {
 	return false, nil
 }
 
+// ignoreNode is what the walks call: the built-in machinery first (its debug
+// lines and error shapes are parity-pinned, so it always runs), then the
+// caller's IgnoreFunc — additively, so the caller can exclude more but never
+// resurrect what stow ignores. target is the path the built-in sources match
+// (untranslated leaf, SPEC §6); pkgRel is the package-relative on-disk path
+// IgnoreFunc is promised, and its kind is the package node's, by lstat.
+func (e *engine) ignoreNode(stowPath, pkg, target, pkgRel string) (bool, error) {
+	ignored, err := e.ignore(stowPath, pkg, target)
+	if err != nil || ignored {
+		return ignored, err
+	}
+	if e.opts.IgnoreFunc == nil {
+		return false, nil
+	}
+	if e.opts.IgnoreFunc(pkgRel, e.isRealDir(joinPaths(stowPath, pkg, pkgRel))) {
+		e.debug(4, 1, "Ignoring path %s due to IgnoreFunc", pkgRel)
+		return true, nil
+	}
+	return false, nil
+}
+
 // ignoreRegexps resolves the three exclusive sources for one package directory,
 // memoizing per file path for the lifetime of the engine as stow does.
 func (e *engine) ignoreRegexps(packageDir string) (*ignoreList, error) {

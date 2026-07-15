@@ -371,6 +371,35 @@ package exposes the token level at all. Likewise the *discovery-time* silent ski
 unreadable file (`stow` tests `-r`) is CLI behaviour; a consumer that names a specific file
 gets the open error from `ParseFile`. The engine (`stow` package) remains config-unaware.
 
+### 3.7 `Options.IgnoreFunc` — caller-owned ignore decisions (issue #41)
+
+dstow's native ignore chain speaks gitignore-glob, while `Options.Ignore` speaks stow regex
+(correctly — it is the compat lane). The consumer therefore owns the *matching*, but the walk
+that consults ignore decisions lives inside the engine; without a seam the fallback is
+pre-matching package trees consumer-side and feeding literal anchored regexes through
+`Options.Ignore` — a duplicated walk and churned pattern lists. Same lineage as §3.5/§3.6:
+additive library seam, CLI never sets it, no parity byte moves.
+
+```go
+IgnoreFunc func(rel string, isDir bool) bool
+```
+
+Consulted at the three walk sites that already consult the built-in machinery
+(`stowContents`, `unstowContents`, `expectContents`), **after** it and **additively**: a node
+is ignored if the built-ins say so *or* `IgnoreFunc` returns true, so a caller can exclude
+more but never resurrect what stow ignores — and the func is never asked about a node the
+built-ins already rejected. `rel` is the package-relative path as it exists on disk, before
+`--dotfiles` translation (`dot-config/nvim`, not `.config/nvim`); `isDir` is the package
+node's kind by lstat, so a symlink reports false, and in `--compat`'s target-tree walk a node
+absent from the package reports false too. Returning true for a directory excludes its whole
+subtree — the walk never descends.
+
+Deterministic input (relative path + kind, nothing environmental) is what keeps `Apply`,
+`Simulate` and `Expected` mutually consistent under the same function, and a hermetic test
+binds `Expected` to an empty-target `Stow` under a live `IgnoreFunc`, both fold settings —
+the same binding §3.5 gave `Expected` itself. The additive-only rule and the never-re-asked
+rule are pinned by mutation-verified tests.
+
 ---
 
 ## 4. CLI surface

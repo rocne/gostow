@@ -58,8 +58,9 @@ func Owner(dir, path string) (pkg string, owned bool, err error) {
 // is how a caller detects that a deployed tree was folded under a setting the
 // current configuration no longer produces.
 //
-// Ignore resolution (--ignore plus the .stow-*-ignore files and the built-in
-// defaults) and --dotfiles translation apply exactly as in a real stow; the
+// Ignore resolution (--ignore plus the .stow-*-ignore files, the built-in
+// defaults, and Options.IgnoreFunc) and --dotfiles translation apply exactly as
+// in a real stow with the same options; the
 // package's ignore files live in the stow dir, not the target, so reading them
 // does not consult the target. A package node that is itself an absolute symlink
 // produces no entry, matching stow's refusal to represent one as a relative link.
@@ -92,7 +93,7 @@ func (e *engine) expectContents(stowPath, pkg, pkgSubdir, targetSubdir string, o
 		targetNode := node
 		targetNodePath := joinPaths(targetSubdir, targetNode)
 
-		ignored, err := e.ignore(stowPath, pkg, targetNodePath)
+		ignored, err := e.ignoreNode(stowPath, pkg, targetNodePath, packageNodePath)
 		if err != nil {
 			return err
 		}
