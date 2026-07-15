@@ -56,6 +56,28 @@ type Options struct {
 	Override  []string
 	Log       io.Writer // nil means io.Discard; the CLI passes os.Stderr
 
+	// IgnoreFunc, when non-nil, is consulted for every node the walk considers,
+	// in addition to the built-in ignore machinery (the compiled-in defaults,
+	// the .stow-*-ignore files, Options.Ignore). rel is the package-relative
+	// path as it exists on disk — before any --dotfiles translation, joined
+	// with "/" — and isDir reports whether that package node is a directory
+	// (lstat, so a symlink reports false; in --compat's target-tree walk a node
+	// absent from the package reports false too). Returning true excludes the
+	// node and, for a directory, its whole subtree.
+	//
+	// The combination is purely additive: a node is ignored if the built-in
+	// machinery says so *or* IgnoreFunc returns true, so a caller can exclude
+	// more but never resurrect what stow ignores. Its input is deterministic —
+	// the relative path and its kind, nothing environmental — which is what
+	// keeps Apply, Simulate and Expected consistent with each other under the
+	// same function. The zero value preserves stow-parity behaviour; the CLI
+	// never sets it.
+	//
+	// It exists for a consumer whose native ignore language is not stow regex:
+	// the caller owns the matching, the engine owns the walk — the engine asks,
+	// the caller answers.
+	IgnoreFunc func(rel string, isDir bool) bool
+
 	// NoGlobalIgnoreFile suppresses the implicit read of $HOME/.stow-global-ignore.
 	// The zero value preserves stow-parity behaviour (the file is read); it exists
 	// for a library consumer whose stance is that the caller owns all
@@ -521,7 +543,7 @@ func (e *engine) stowContents(stowPath, pkg, pkgSubdir, targetSubdir string) err
 
 		// Ignore matching happens on the *untranslated* path, before the
 		// dot-prefix adjustment below. See SPEC §6.
-		ignored, err := e.ignore(stowPath, pkg, targetNodePath)
+		ignored, err := e.ignoreNode(stowPath, pkg, targetNodePath, packageNodePath)
 		if err != nil {
 			return err
 		}
@@ -713,7 +735,15 @@ func (e *engine) unstowContents(pkg, pkgSubdir, targetSubdir string) error {
 		targetNode := node
 		targetNodePath := joinPaths(targetSubdir, targetNode)
 
-		ignored, err := e.ignore(e.stowPath, pkg, targetNodePath)
+		// IgnoreFunc is promised the package-relative on-disk path. In compat
+		// mode the walk is over the target tree, so that is the node's reverse
+		// translation — computed here rather than reusing the adjustment below,
+		// which must stay after the ignore check to keep the debug line order.
+		pkgNodeOnDisk := node
+		if e.opts.Compat && e.opts.Dotfiles {
+			pkgNodeOnDisk = unadjustDotfile(node)
+		}
+		ignored, err := e.ignoreNode(e.stowPath, pkg, targetNodePath, joinPaths(pkgSubdir, pkgNodeOnDisk))
 		if err != nil {
 			return err
 		}
