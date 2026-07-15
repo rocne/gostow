@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/rocne/gostow/compare/v0.3.0...v0.4.0) (2026-07-15)
+
+
+### Features
+
+* **stow:** add Options.IgnoreFunc for caller-owned ignore decisions ([#42](https://github.com/rocne/gostow/issues/42)) ([7a46029](https://github.com/rocne/gostow/commit/7a46029cbf0e87b3e083c619535662da4ee526a8))
+
 ## [0.3.0](https://github.com/rocne/gostow/compare/v0.2.0...v0.3.0) (2026-07-15)
 
 
