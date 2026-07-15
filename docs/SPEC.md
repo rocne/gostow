@@ -327,6 +327,50 @@ suffix-anchored against the whole target path (`IgnoreAnchor`), while ignore-**f
 get stow's segment/path split with different anchoring (`compileIgnorePatterns`). A consumer
 translating between the two channels — as dstow does — must account for it.*
 
+### 3.6 The `stowrc` package — rc parsing for library consumers (issue #39)
+
+dstow's stow-compatibility layer needs to parse *individual* rc files with stow's exact
+semantics — `~/.stowrc` at its global level, `<repo>/.stowrc` at its repo level, discovered
+via the repo rather than the cwd — and to receive the parse result **as data**, so it can map
+options onto its own knob chain and diff them per-knob. All of that machinery existed in
+`internal/cli`, conformance-tested and unexported. Duplicating it outside gostow would fork
+pinned behaviour, so — same justification as §3.5 — the parser moved wholesale into the public
+package `github.com/rocne/gostow/stowrc`, and the CLI became its first consumer. **No parity
+byte moved**: the differential fixtures and goldens are untouched, and the whole suite pins
+the refactor.
+
+The shape follows §5's pipeline, one exported name per stage:
+
+- **`Tokens(r io.Reader, name string, fixQuirks bool)`** — one source's lines through Perl's
+  `shellwords`, with the Perl-readline failure shape (`Could not close open file: <name>`)
+  when the source opens but cannot be read. `fixQuirks` is the PL-02 comment toggle
+  (§8.36), per source, exactly as the CLI applies it.
+- **`Parse(tokens []string) Result`** — the token stream under stow's `Getopt::Long`
+  configuration. It never fails: diagnostics accumulate in `Result.Errors` and parsing
+  continues, as `GetOptions` does. This is the *same parser* the CLI runs on argv, which is
+  §5's step 2 made literal.
+- **`Result`** — the structured option set. Scalars are pointers so "absent" survives
+  (per-knob diffing turns on it); package-name/action tokens are **surfaced** in
+  `Result.Requests` rather than pre-discarded, with the rc rule (stow drops them; PL-02
+  depends on it) left to the caller — the CLI still applies it.
+- **`ExpandFilepath(path, source string)`** — stow's `$VAR`/`${VAR}`/`~` expansion, applied
+  to `--dir`/`--target` *post-parse*, undefined variable dying byte-exactly. `ParseFile` /
+  `ParseReader` — the per-file conveniences dstow actually calls — run all three stages.
+- **`DieError`** — the bare-`die()` error type: message reaches stderr unadorned (§8.1's
+  two fatal shapes), and the bytes are pinned. The CLI's exit-2 mapping keys on it.
+- **`OptionNames()`** — the option table's public projection (canonical name first,
+  aliases after). The man page and the three completion scripts are held to it by the
+  docs tests, as before; the table itself stays private because its entry type lives in
+  `internal/getopt`.
+
+**What deliberately did not move.** Discovery and concatenation stay in the CLI
+(`readStowrcTokens`): stow joins both files' token streams *before* parsing, so an option at
+the end of `~/.stowrc` may legally take its value from the first token of `./.stowrc` —
+parsing each file separately and merging the results is not byte-equivalent, which is why the
+package exposes the token level at all. Likewise the *discovery-time* silent skip of an
+unreadable file (`stow` tests `-r`) is CLI behaviour; a consumer that names a specific file
+gets the open error from `ParseFile`. The engine (`stow` package) remains config-unaware.
+
 ---
 
 ## 4. CLI surface
@@ -563,6 +607,10 @@ gostow follows the **code**, not the manual. Ledger PL-01.
   - A reference to an **undefined** variable is fatal:
     `--target option references undefined environment variable $FOO; aborting!` **[probed]**
   - `~` and `~user` expand to home directories; `\~` unescapes.
+
+This whole pipeline — tokenization, the shared parser, post-parse expansion — is exposed to
+library consumers as the public `stowrc` package (§3.6). The CLI is its first consumer;
+discovery and token concatenation stay CLI-side.
 
 ---
 

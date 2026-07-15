@@ -119,31 +119,6 @@ func firstLine(s string) string {
 	return s
 }
 
-func TestShellwords(t *testing.T) {
-	tests := []struct {
-		in   string
-		want []string
-	}{
-		{`--dir=a --target=b`, []string{"--dir=a", "--target=b"}},
-		{`--dir='a b'`, []string{"--dir=a b"}},
-		{`--dir="a b"`, []string{"--dir=a b"}},
-		{`--dir=a\ b`, []string{"--dir=a b"}},
-		// '#' is not a comment character: PL-02.
-		{`--ignore=x # note`, []string{"--ignore=x", "#", "note"}},
-		{``, nil},
-		{`   `, nil},
-	}
-	for _, tt := range tests {
-		got, err := shellwords(tt.in)
-		if err != nil {
-			t.Fatalf("shellwords(%q): %v", tt.in, err)
-		}
-		if strings.Join(got, "\x1f") != strings.Join(tt.want, "\x1f") {
-			t.Errorf("shellwords(%q) = %q, want %q", tt.in, got, tt.want)
-		}
-	}
-}
-
 func write(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

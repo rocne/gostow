@@ -18,6 +18,7 @@ import (
 	"github.com/rocne/gostow/internal/stowpath"
 	"github.com/rocne/gostow/internal/ui"
 	"github.com/rocne/gostow/stow"
+	"github.com/rocne/gostow/stowrc"
 )
 
 // Exit codes. Fatal errors are pinned to 2 rather than following stow's
@@ -62,10 +63,11 @@ func Run(args []string, version string, stdout, stderr io.Writer) int {
 		// prefixes "<prog>: ERROR: "; a bare die() does not. Both are pinned to
 		// exit 2 here, because stow's die status is errno-derived and therefore
 		// undefined (ledger PL-07) -- but the message bytes are reproducible and
-		// so are replicated exactly.
-		var de *dieError
+		// so are replicated exactly. The bare-die paths all live in rc handling,
+		// which is why the type is stowrc's.
+		var de *stowrc.DieError
 		if errors.As(err, &de) {
-			fmt.Fprintln(a.stderr, de.msg)
+			fmt.Fprintln(a.stderr, de.Msg)
 		} else {
 			fmt.Fprintf(a.stderr, "%s: ERROR: %v\n", a.prog, err)
 		}
@@ -73,11 +75,6 @@ func Run(args []string, version string, stdout, stderr io.Writer) int {
 	}
 	return code
 }
-
-// dieError is a Perl die(): its message reaches stderr unadorned.
-type dieError struct{ msg string }
-
-func (e *dieError) Error() string { return e.msg }
 
 // usage prints the help block on stdout and, when msg is non-empty, a diagnostic
 // on stderr first. stow calls usage(”) on a parse failure: the empty message
@@ -96,36 +93,36 @@ func (a *app) usage(msg string, showMsg bool) int {
 }
 
 func (a *app) run(argv []string) (int, error) {
-	cli := parseArgs(argv)
+	cli := stowrc.Parse(argv)
 	if code, done := a.finishParse(cli); done {
 		return code, nil
 	}
 
-	rcTokens, err := readStowrcTokens(cli.fixQuirks)
+	rcTokens, err := readStowrcTokens(cli.FixQuirks)
 	if err != nil {
 		return 0, err
 	}
-	rc := parseArgs(rcTokens)
+	rc := stowrc.Parse(rcTokens)
 	if code, done := a.finishParse(rc); done {
 		return code, nil
 	}
 	// rc package names are parsed and then discarded, which is what makes
 	// .stowrc comments appear to work (ledger PL-02).
-	rc.requests = nil
+	rc.Requests = nil
 
-	if rc.dir != nil {
-		expanded, err := expandFilepath(*rc.dir, "--dir option")
+	if rc.Dir != nil {
+		expanded, err := stowrc.ExpandFilepath(*rc.Dir, "--dir option")
 		if err != nil {
 			return 0, err
 		}
-		rc.dir = &expanded
+		rc.Dir = &expanded
 	}
-	if rc.target != nil {
-		expanded, err := expandFilepath(*rc.target, "--target option")
+	if rc.Target != nil {
+		expanded, err := stowrc.ExpandFilepath(*rc.Target, "--target option")
 		if err != nil {
 			return 0, err
 		}
-		rc.target = &expanded
+		rc.Target = &expanded
 	}
 
 	opts := merge(rc, cli)
@@ -144,17 +141,17 @@ func (a *app) run(argv []string) (int, error) {
 // finishParse reports parse diagnostics and handles --help/--version, which stow
 // honours only after a successful parse. help wins over version: usage() is
 // checked first.
-func (a *app) finishParse(p parsed) (int, bool) {
-	if len(p.errors) > 0 {
-		for _, e := range p.errors {
+func (a *app) finishParse(p stowrc.Result) (int, bool) {
+	if len(p.Errors) > 0 {
+		for _, e := range p.Errors {
 			fmt.Fprintln(a.stderr, e)
 		}
 		return a.usage("", true), true
 	}
-	if p.help {
+	if p.Help {
 		return a.usage("", false), true
 	}
-	if p.version {
+	if p.Version {
 		fmt.Fprintln(a.stdout, IdentityLine(a.version))
 		return exitOK, true
 	}
@@ -164,9 +161,9 @@ func (a *app) finishParse(p parsed) (int, bool) {
 // sanitizePaths resolves --dir from $STOW_DIR or the cwd, and --target from the
 // parent of --dir, validating both. Because this runs *after* the rc/CLI merge,
 // a --dir in .stowrc beats $STOW_DIR.
-func (a *app) sanitizePaths(p *parsed) (dir, target string, code int, err error) {
-	if p.dir != nil {
-		dir = *p.dir
+func (a *app) sanitizePaths(p *stowrc.Result) (dir, target string, code int, err error) {
+	if p.Dir != nil {
+		dir = *p.Dir
 	} else if sd := os.Getenv("STOW_DIR"); sd != "" {
 		dir = sd
 	} else {
@@ -180,8 +177,8 @@ func (a *app) sanitizePaths(p *parsed) (dir, target string, code int, err error)
 		return "", "", a.usage(fmt.Sprintf("--dir value '%s' is not a valid directory", dir), true), nil
 	}
 
-	if p.target != nil {
-		target = *p.target
+	if p.Target != nil {
+		target = *p.Target
 		if !isDir(target) {
 			return "", "", a.usage(fmt.Sprintf("--target value '%s' is not a valid directory", target), true), nil
 		}
@@ -201,12 +198,12 @@ func isDir(p string) bool {
 	return err == nil && fi.IsDir()
 }
 
-func (a *app) checkPackages(p *parsed) (int, error) {
-	if len(p.packages()) == 0 {
+func (a *app) checkPackages(p *stowrc.Result) (int, error) {
+	if len(packages(*p)) == 0 {
 		return a.usage("No packages to stow or unstow", true), nil
 	}
 	stripTrailingSlashes(p)
-	for _, name := range p.packages() {
+	for _, name := range packages(*p) {
 		if strings.Contains(name, "/") {
 			return 0, errors.New("Slashes are not permitted in package names") //nolint:staticcheck // byte-exact stow wording
 		}
@@ -214,24 +211,24 @@ func (a *app) checkPackages(p *parsed) (int, error) {
 	return exitOK, nil
 }
 
-func (a *app) apply(p parsed, dir, target string) (int, error) {
+func (a *app) apply(p stowrc.Result, dir, target string) (int, error) {
 	opts := stow.Options{
 		Dir:       dir,
 		Target:    target,
-		Fold:      !p.noFolding,
-		Dotfiles:  p.dotfiles,
-		Adopt:     p.adopt,
-		Compat:    p.compat,
-		Simulate:  p.simulate,
-		FixQuirks: p.fixQuirks,
-		Verbosity: p.verbosity(),
-		Ignore:    p.ignore,
-		Defer:     p.deferred,
-		Override:  p.override,
+		Fold:      !p.NoFolding,
+		Dotfiles:  p.Dotfiles,
+		Adopt:     p.Adopt,
+		Compat:    p.Compat,
+		Simulate:  p.Simulate,
+		FixQuirks: p.FixQuirks,
+		Verbosity: p.Verbosity(),
+		Ignore:    p.Ignore,
+		Defer:     p.Defer,
+		Override:  p.Override,
 		Log:       a.stderr,
 	}
 
-	_, err := stow.Apply(opts, p.requests...)
+	_, err := stow.Apply(opts, p.Requests...)
 
 	var ce *stow.ConflictError
 	if errors.As(err, &ce) {
@@ -242,7 +239,7 @@ func (a *app) apply(p parsed, dir, target string) (int, error) {
 		return 0, err
 	}
 
-	if p.simulate {
+	if p.Simulate {
 		fmt.Fprintln(a.stderr, "WARNING: in simulation mode so not modifying filesystem.")
 	}
 	return exitOK, nil
