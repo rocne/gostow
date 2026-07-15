@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/rocne/gostow/internal/conformance"
+	"github.com/rocne/gostow/stowrc"
 )
 
 // --gostow-* flags answer only to their exact name. Without NoAbbrev, adding
@@ -57,8 +58,8 @@ func TestHelpDocumentsEveryOption(t *testing.T) {
 		t.Fatalf("exit = %d, want 0", code)
 	}
 
-	for _, opt := range spec() {
-		for _, name := range opt.Names {
+	for _, names := range stowrc.OptionNames() {
+		for _, name := range names {
 			flag := "-" + name
 			if len(name) > 1 {
 				flag = "--" + name

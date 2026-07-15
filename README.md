@@ -228,6 +228,19 @@ _, err := stow.Apply(stow.Options{
 an invocation is all-or-nothing. `FixQuirks` defaults to false because gostow's promise is
 to *be* stow; a consumer building something better on top should turn it on.
 
+`.stowrc` parsing is a library too — the same conformance-tested pipeline the CLI runs
+(Perl-shellwords tokenization, `Getopt::Long` parsing, `$VAR`/`~` expansion), for consumers
+that need a specific rc file's options as data:
+
+```go
+import "github.com/rocne/gostow/stowrc"
+
+rc, err := stowrc.ParseFile("/home/me/dotfiles/.stowrc", false)
+// rc.Target, rc.Ignore, ... — parsed and expanded, absent scalars are nil
+```
+
+File discovery stays with the caller; see SPEC §3.6 for the full surface.
+
 ## Development
 
 ```console

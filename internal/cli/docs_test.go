@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/rocne/gostow/stowrc"
 )
 
 // spec() is the only place gostow's options are declared. The man page and the
@@ -24,12 +26,13 @@ import (
 // mentions --compat/-p. Neither document lists every option stow accepts. See
 // docs/SPEC.md §10.
 
-// specFlags renders spec() as the flag strings a user would type.
+// specFlags renders the option table as the flag strings a user would type.
+// The table lives in the public stowrc package; OptionNames is its projection.
 func specFlags(t *testing.T) []string {
 	t.Helper()
 	var out []string
-	for _, opt := range spec() {
-		for _, name := range opt.Names {
+	for _, names := range stowrc.OptionNames() {
+		for _, name := range names {
 			if len(name) == 1 {
 				out = append(out, "-"+name)
 			} else {
@@ -38,7 +41,7 @@ func specFlags(t *testing.T) []string {
 		}
 	}
 	if len(out) < 20 {
-		t.Fatalf("spec() rendered only %d flags; the renderer is broken and every test below would be vacuous", len(out))
+		t.Fatalf("stowrc.OptionNames() rendered only %d flags; the renderer is broken and every test below would be vacuous", len(out))
 	}
 	sort.Strings(out)
 	return out
