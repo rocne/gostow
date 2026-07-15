@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.0](https://github.com/rocne/gostow/compare/v0.2.0...v0.3.0) (2026-07-15)
+
+
+### Features
+
+* add a self-contained curl | sh installer ([#31](https://github.com/rocne/gostow/issues/31)) ([57e1b63](https://github.com/rocne/gostow/commit/57e1b63cd9661e6ae7b3f6d4081f6f1d3c783653))
+* **stow:** expose plan-only, ownership, conflict and ignore introspection for library consumers ([#37](https://github.com/rocne/gostow/issues/37)) ([dc06e5b](https://github.com/rocne/gostow/commit/dc06e5bf7ad66003065754ff022330840aeb2247))
+* **stowrc:** expose .stowrc parsing as a public library API ([#40](https://github.com/rocne/gostow/issues/40)) ([eb51a68](https://github.com/rocne/gostow/commit/eb51a68007bbda3559f9ac109c1e7f3e34819b3e))
+
 ## [0.2.0](https://github.com/rocne/gostow/compare/v0.1.1...v0.2.0) (2026-07-10)
 
 
