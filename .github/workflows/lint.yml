@@ -20,7 +20,8 @@ jobs:
         with:
           version: "v2.11.4"
 
-      # install.sh is piped into `sh` from the internet; a bug in it runs on a
-      # stranger's machine. shellcheck is preinstalled on the ubuntu runner.
-      - name: Shellcheck install.sh
+      # install.sh (and snippet.sh where vendored) is piped into `sh` from the
+      # internet; a bug in it runs on a stranger's machine. shellcheck is
+      # preinstalled on the ubuntu runner. Canonical step: release-ci#39.
+      - name: Shellcheck the vendored installer
         run: shellcheck install.sh

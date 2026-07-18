@@ -1,0 +1,8 @@
+# Keeps action SHAs and the release-ci pins moving as visible PRs — the
+# single-pin rule's mechanism (release-ci#38, adoption audit row 12).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
