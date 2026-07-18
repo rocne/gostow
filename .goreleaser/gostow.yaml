@@ -170,22 +170,18 @@ signs:
       - "${artifact}"
       - "--yes"
 
-# Attach both public keys to the GitHub release so a user can verify a downloaded
-# .deb/.rpm by hand, without trusting the Cloudsmith setup script.
+# Attach the package-signing public key to the GitHub release so a user can
+# verify a downloaded .deb/.rpm by hand.
 #
-# These are two DIFFERENT keys with different jobs:
-#   gostow-signing-key.asc       signs the packages themselves (fpr A998BF5F…).
-#                                gostow-specific; its private half is the
-#                                GPG_PRIVATE_KEY repo secret.
-#   gostow-repo-signing-key.asc  signs the apt/dnf repo INDEX (fpr 32F6F3B7…).
-#                                Shared: gostow and dot-dagger both publish into
-#                                the Cloudsmith repo rocne/releases, which has one
-#                                index and therefore one key. Its uid still reads
-#                                "dotd repository signing" for historical reasons.
+#   gostow-signing-key.asc  signs the packages themselves (fpr 64894FE3…).
+#                           Its private half is the GPG_PRIVATE_KEY repo secret.
+#
+# The apt/dnf repo INDEX is signed by a Cloudsmith-managed key (rocne/releases),
+# whose public half Cloudsmith serves via its setup.deb.sh / setup.rpm.sh — so it
+# is no longer committed here.
 release:
   extra_files:
     - glob: ./gostow-signing-key.asc
-    - glob: ./gostow-repo-signing-key.asc
 
 changelog:
   sort: asc
