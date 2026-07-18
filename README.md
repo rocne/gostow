@@ -43,7 +43,7 @@ it is [`install.sh`](install.sh) in this repo, and the URL above is that same fi
 $ curl -fsSL https://raw.githubusercontent.com/rocne/gostow/main/install.sh | sh -s -- --dry-run
 ```
 
-It takes `--version v0.2.0` to pin a release, `--dir DIR` to install elsewhere, `--bin-only`
+It takes `--version v0.2.0` to pin a release, `--install-dir DIR` to install elsewhere, `--bin-only`
 to skip the man page and completions, and `--os`/`--arch` to override detection. The manual
 tarball recipe [below](#any-linux-or-macos--tarball) does the same steps by hand.
 
