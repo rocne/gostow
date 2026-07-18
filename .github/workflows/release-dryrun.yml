@@ -58,6 +58,21 @@ jobs:
           VERSION: v0.0.0-dryrun
           GPG_KEY_PATH: ${{ env.GPG_KEY_PATH }}
 
+      # D34 artifact-shape contract (rocne/release-ci#24): fail the dry-run here
+      # if the goreleaser config drifts from the shape the installer, verify job,
+      # and smoke all consume. The assertion is owned once, in release-ci, and
+      # pinned by tag like the rest of the pipeline.
+      - name: Fetch the D34 assertion from release-ci
+        uses: actions/checkout@v6
+        with:
+          repository: rocne/release-ci
+          ref: v0.1.2
+          path: .release-ci
+          persist-credentials: false
+
+      - name: Assert the artifact-shape contract (D34)
+        run: sh .release-ci/release-dryrun/assert-artifact-shape.sh gostow
+
       - name: Verify the snapshot signature (cosign checksums)
         run: |
           CHECKSUMS=$(ls dist/*checksums.txt)
