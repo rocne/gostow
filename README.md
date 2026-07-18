@@ -126,6 +126,20 @@ next release. Set `VER=v0.1.1` by hand if you want a specific one.
 $ go install github.com/rocne/gostow/cmd/gostow@latest
 ```
 
+### With mise
+
+If you use [mise](https://mise.jdx.dev), install straight from the GitHub releases —
+no registry entry needed:
+
+```console
+$ mise use -g github:rocne/gostow
+```
+
+Of every method here, this is the only one that **verifies gostow's build
+provenance attestations by default**: mise checks them unprompted before
+installing, so you get the security work below for free. Pin a version with
+`@` (e.g. `github:rocne/gostow@0.4.0`).
+
 ### From source
 
 ```console
