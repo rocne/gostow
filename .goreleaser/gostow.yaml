@@ -161,12 +161,12 @@ checksum:
 signs:
   - cmd: cosign
     artifacts: checksum
-    signature: "${artifact}.sig"
-    certificate: "${artifact}.pem"
+    # cosign v3 signs into a single Sigstore bundle (signature + Fulcio cert);
+    # the old detached .sig/.pem pair is gone (rocne/release-ci#45, D35).
+    signature: "${artifact}.sigstore.json"
     args:
       - sign-blob
-      - "--output-certificate=${certificate}"
-      - "--output-signature=${signature}"
+      - "--bundle=${signature}"
       - "${artifact}"
       - "--yes"
 
