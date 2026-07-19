@@ -1,0 +1,31 @@
+#!/usr/bin/env sh
+# pre-commit — canonical hook. Authored in rocne/release-ci (.githooks/
+# pre-commit), distributed to consumers through the same vendoring pipe as
+# install.sh; everything in this file is byte-identical across repos (no
+# config block — nothing here is per-consumer).
+#
+# Activation is a one-time, per-machine opt-in (git will never auto-run a
+# hook that arrived in a clone — by design):
+#   git config --global core.hooksPath .githooks
+# Repos without a .githooks/ directory are unaffected by the global setting.
+#
+# Opportunistic by design — the installer's F5 posture applied to hooks: the
+# hook is fast local feedback, CI's gitleaks gate is the contract. A missing
+# gitleaks skips with one notice rather than blocking every fresh machine;
+# enforcement lives in the pipeline, which cannot be skipped.
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "notice: gitleaks not installed - staged-secret scan skipped (CI still enforces)" >&2
+  exit 0
+fi
+
+# --staged: scan what this commit would introduce, before it enters history.
+# --redact: never echo the secret itself into the terminal or scrollback.
+if ! gitleaks git --pre-commit --staged --redact --no-banner .; then
+  echo "" >&2
+  echo "error: potential secret in the staged changes - commit blocked" >&2
+  echo "hint: unstage it (git restore --staged <file>) and remove the secret;" >&2
+  echo "hint: for a false positive, add a 'gitleaks:allow' comment on the line;" >&2
+  echo "hint: emergencies only: git commit --no-verify (CI will still catch it)" >&2
+  exit 1
+fi
