@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/rocne/gostow/compare/v0.4.0...v0.4.1) (2026-07-19)
+
+
+### Bug Fixes
+
+* **signing:** adopt cosign v3 Sigstore bundle (release-ci[#45](https://github.com/rocne/gostow/issues/45), D35) ([#53](https://github.com/rocne/gostow/issues/53)) ([897e0cb](https://github.com/rocne/gostow/commit/897e0cb7b28f3c7569c0c35cfe32d2b78aaab109))
+
 ## [0.4.0](https://github.com/rocne/gostow/compare/v0.3.0...v0.4.0) (2026-07-15)
 
 
