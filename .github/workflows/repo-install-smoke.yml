@@ -29,7 +29,7 @@ jobs:
             mgr: dnf
     container: ${{ matrix.image }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # Invoke via `bash` explicitly: the container's default /bin/sh is dash on
       # Ubuntu, which can't run the script's `set -o pipefail`.
