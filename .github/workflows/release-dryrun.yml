@@ -25,7 +25,7 @@ jobs:
   dryrun:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -66,7 +66,7 @@ jobs:
       # and smoke all consume. The assertion is owned once, in release-ci, and
       # pinned by tag like the rest of the pipeline.
       - name: Fetch the D34 assertion from release-ci
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: rocne/release-ci
           ref: v0.1.4
