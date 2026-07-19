@@ -33,9 +33,10 @@ jobs:
         with:
           go-version-file: go.mod
 
-      # v4 installs cosign v3 — must match release.yml's installer major, or the
-      # dryrun signs a different bundle format than the real release (#45, D35).
-      - uses: sigstore/cosign-installer@v4
+      # SHA-pinned to the exact ref release.yml uses (cosign v3), so the dryrun
+      # and the real release can never install a different cosign major — the
+      # disagreement that let #45 through (D35).
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
       - name: Install rpm tooling
         run: sudo apt-get update && sudo apt-get install -y rpm
