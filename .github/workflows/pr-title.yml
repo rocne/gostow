@@ -11,4 +11,4 @@ permissions:
 
 jobs:
   lint:
-    uses: rocne/release-ci/.github/workflows/pr-title.yml@v0.1.3
+    uses: rocne/release-ci/.github/workflows/pr-title.yml@v0.1.4
