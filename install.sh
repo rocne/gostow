@@ -16,8 +16,8 @@
 #
 # Artifact-shape contract (D34) — what this script consumes; asserted by each
 # consumer's release-dryrun, produced by its GoReleaser config:
-#   <tool>_<tag>_<os>_<arch>.tar.gz          the archive, binary at its root
-#   <tool>_<tag>_checksums.txt (+ .sig/.pem) checksums and cosign signature
+#   <bin>_<tag>_<os>_<arch>.tar.gz          the archive, binary at its root
+#   <bin>_<tag>_checksums.txt (+ .sigstore.json) checksums + cosign bundle
 #   man/ and completions/ inside the archive when the tool ships them
 #
 # Positioning, honestly (§6.9): presence-checking by default is a minority
@@ -37,9 +37,12 @@ set -eu
 
 # ---- vendored config (per-consumer; everything below is canonical) ----
 REPO="rocne/gostow"                          # GitHub slug, e.g. rocne/dot-dagger. Set at vendor time.
-TOOL="gostow"                          # installed binary name, e.g. dotd. NOT always the repo slug.
+BIN=""                            # installed binary name; only set if it diverges from
+                                  # the repo name (e.g. rocne/dot-dagger -> dotd).
 SIGNER_REPO="rocne/release-ci"   # Fulcio identity the release is signed as (D25)
 # ---- end vendored config ----
+
+BIN="${BIN:-${REPO##*/}}"
 
 # Output levels (D10): silent=0 quiet=1 normal=2 verbose=3. The exit code is
 # unconditional and level-independent (F6); only the *message* varies. All
@@ -50,7 +53,7 @@ SIGNER_REPO="rocne/release-ci"   # Fulcio identity the release is signed as (D25
 
 usage() {
   cat >&2 <<EOF
-install.sh — download and install ${TOOL:-<tool>} from ${REPO:-<repo>} releases
+install.sh — download and install ${BIN:-<bin>} from ${REPO:-<repo>} releases
 
 Usage:
   curl -fsSL https://raw.githubusercontent.com/${REPO:-<owner>/<repo>}/main/install.sh | sh
@@ -74,15 +77,18 @@ Flags:
   -h, --help           this text
 
 Environment (namespaced from the binary name, e.g. GOSTOW_*):
-  <TOOL>_INSTALL_DIR        install directory (--install-dir wins over it)
-  <TOOL>_INSTALL_LOG_LEVEL  verbose | normal | quiet | silent (flags win)
+  <BIN>_INSTALL_DIR        install directory (--install-dir wins over it)
+  <BIN>_INSTALL_LOG_LEVEL  verbose | normal | quiet | silent (flags win)
   XDG_BIN_HOME              honored below both (uv's convention)
 
 Behavior:
   Already installed and no flags → one status line, exit 0, no network.
   Found elsewhere on PATH (apt/brew) → not shadowed; says so, exit 0.
   Checksum verification is mandatory: no sha256sum/shasum → abort.
-  cosign, when present, verifies the release signature (Sigstore).
+  cosign, when present, verifies the release signature (Sigstore). The release
+  is signed as a Sigstore bundle (new format), so verification needs cosign v3+;
+  an older cosign is treated like a missing signature (skipped, or aborts under
+  --require-signature).
 
 Exit codes: 0 success or no-op · 1 runtime failure · 2 usage error
 EOF
@@ -166,8 +172,8 @@ parse_args() {
 }
 
 require_vendored_config() {
-  if [ -z "$REPO" ] || [ -z "$TOOL" ]; then
-    die "REPO/TOOL are unset — this is the canonical source, not an installer" \
+  if [ -z "$REPO" ] || [ -z "$BIN" ]; then
+    die "REPO/BIN are unset — this is the canonical source, not an installer" \
       "vendor this script into a consumer repo and set the config block" 2
   fi
 }
@@ -175,11 +181,11 @@ require_vendored_config() {
 # The env vars are namespaced from the binary name (D8): a bare INSTALL_DIR
 # exported for any unrelated purpose would be silently absorbed. eval is
 # confined to reading ${<PREFIX>_...} where PREFIX is [A-Z0-9_] derived from
-# TOOL.
+# BIN.
 ENV_INSTALL_DIR=""
 
 read_environment() {
-  env_prefix=$(printf '%s' "$TOOL" | tr '[:lower:]-' '[:upper:]_' | tr -cd 'A-Z0-9_')
+  env_prefix=$(printf '%s' "$BIN" | tr '[:lower:]-' '[:upper:]_' | tr -cd 'A-Z0-9_')
   eval "ENV_INSTALL_DIR=\${${env_prefix}_INSTALL_DIR:-}"
   eval "env_log_level=\${${env_prefix}_INSTALL_LOG_LEVEL:-}"
   # Flags win over the environment.
@@ -243,8 +249,8 @@ fetch() { curl -fsSL --proto '=https' --tlsv1.2 --retry 3 "$@"; }
 
 # ---- presence check (F1, D16, D28) -----------------------------------------
 
-# D30's parse rule: the first line of `$tool --version` output contains the
-# tool's own version as the first semver-shaped token on that line. Prints the
+# D30's parse rule: the first line of `$bin --version` output contains the
+# binary's own version as the first semver-shaped token on that line. Prints the
 # token, or nothing when the binary can't run or nothing parses — D28 defines
 # that degradation as "unsatisfied": ensure then installs, which converges and
 # repairs a broken binary as a side effect.
@@ -263,7 +269,7 @@ version_of() {
 # shadowed (mise checks only the install path and gets that case wrong).
 # Presence-checking at all is our deliberate minority stance (§6.9).
 presence_check() {
-  target="$INSTALL_DIR/$TOOL"
+  target="$INSTALL_DIR/$BIN"
   # A directory (or any non-file) at the target can never be installed over:
   # mv would move the binary *inside* it and report success falsely, and every
   # later run would call the directory "already installed" — a permanent wedge.
@@ -277,31 +283,31 @@ presence_check() {
   if [ -e "$target" ]; then
     have=$(version_of "$target")
     if [ -z "$REQ_VERSION" ]; then
-      log_info "$TOOL ${have:+v$have }already installed at $target; use --force to reinstall"
+      log_info "$BIN ${have:+v$have }already installed at $target; use --force to reinstall"
       exit 0
     fi
     if [ "$have" = "$REQ_VERSION" ]; then
-      log_info "$TOOL v$have already installed at $target"
+      log_info "$BIN v$have already installed at $target"
       exit 0
     fi
     log_detail "$target reports ${have:+v$have}${have:-no parseable version}; ensuring v$REQ_VERSION"
     return 0
   fi
 
-  found=$(command -v "$TOOL" 2>/dev/null) || found=""
+  found=$(command -v "$BIN" 2>/dev/null) || found=""
   if [ -n "$found" ]; then
     have=$(version_of "$found")
     if [ -z "$REQ_VERSION" ]; then
-      log_info "$TOOL ${have:+v$have }found at $found; not shadowing it (use --force to install to $INSTALL_DIR)"
+      log_info "$BIN ${have:+v$have }found at $found; not shadowing it (use --force to install to $INSTALL_DIR)"
       exit 0
     fi
     if [ "$have" = "$REQ_VERSION" ]; then
-      log_info "$TOOL v$have found at $found"
+      log_info "$BIN v$have found at $found"
       exit 0
     fi
     # An explicit --version the found copy does not satisfy installs anyway:
     # the user asked for a version, not a location. Say what gets shadowed.
-    log_warn "$TOOL ${have:+v$have }at $found does not satisfy v$REQ_VERSION; installing to $INSTALL_DIR (one will shadow the other on PATH)"
+    log_warn "$BIN ${have:+v$have }at $found does not satisfy v$REQ_VERSION; installing to $INSTALL_DIR (one will shadow the other on PATH)"
   fi
   return 0
 }
@@ -339,19 +345,19 @@ resolve_tag() {
              "the repo has no published release yet; pass --version vX.Y.Z if you know one" ;;
     esac
   fi
-  ASSET="${TOOL}_${TAG}_${OS}_${ARCH}.tar.gz"
-  CHECKSUMS="${TOOL}_${TAG}_checksums.txt"
+  ASSET="${BIN}_${TAG}_${OS}_${ARCH}.tar.gz"
+  CHECKSUMS="${BIN}_${TAG}_checksums.txt"
 }
 
 # The full plan prints at normal level under --dry-run (it is the output the
 # flag exists for) and at verbose otherwise.
 print_plan() {
   if [ "$DRY_RUN" = 1 ]; then plan_log=log_info; else plan_log=log_detail; fi
-  "$plan_log" "tool:     $TOOL"
+  "$plan_log" "bin:      $BIN"
   "$plan_log" "platform: $OS/$ARCH"
   "$plan_log" "release:  $TAG"
   "$plan_log" "asset:    $ASSET"
-  "$plan_log" "install:  $INSTALL_DIR/$TOOL"
+  "$plan_log" "install:  $INSTALL_DIR/$BIN"
   if [ "$BIN_ONLY" = 0 ]; then
     "$plan_log" "extras:   man pages + completions, when the archive ships them"
   fi
@@ -406,8 +412,14 @@ verify_signature() {
     return 0
   fi
   base_url="https://github.com/$REPO/releases/download/$TAG"
-  if ! fetch -o "$WORK_DIR/$CHECKSUMS.sig" "$base_url/$CHECKSUMS.sig" \
-    || ! fetch -o "$WORK_DIR/$CHECKSUMS.pem" "$base_url/$CHECKSUMS.pem"; then
+  # cosign v3 signs blobs into a single Sigstore bundle (checksums.txt.sigstore.json)
+  # carrying both the signature and the Fulcio certificate; the old detached
+  # .sig/.pem pair is gone (release-ci #45). Verifying the new bundle format needs
+  # cosign v3+ — an older cosign here degrades like a missing signature (below).
+  # 2>/dev/null: this fetch is opportunistic — a release with no bundle is a
+  # clean skip below, not an error, so curl's own 404 noise must not leak (the
+  # mandatory archive/checksums fetches keep their diagnostics).
+  if ! fetch -o "$WORK_DIR/$CHECKSUMS.sigstore.json" "$base_url/$CHECKSUMS.sigstore.json" 2>/dev/null; then
     if [ "$REQUIRE_SIG" = 1 ]; then
       die "--require-signature was given but $TAG publishes no signature"
     fi
@@ -416,8 +428,7 @@ verify_signature() {
   fi
   signer_re=$(printf '%s' "$SIGNER_REPO" | sed 's/\./\\./g')
   if cosign verify-blob \
-      --certificate "$WORK_DIR/$CHECKSUMS.pem" \
-      --signature   "$WORK_DIR/$CHECKSUMS.sig" \
+      --bundle "$WORK_DIR/$CHECKSUMS.sigstore.json" \
       --certificate-identity-regexp "^https://github\\.com/${signer_re}/\\.github/workflows/release\\.yml@refs/tags/v" \
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
       "$WORK_DIR/$CHECKSUMS" >/dev/null 2>&1; then
@@ -484,24 +495,24 @@ install_extras() {
 install_files() {
   tar -xzf "$WORK_DIR/$ASSET" -C "$WORK_DIR" \
     || die "could not extract $ASSET"
-  if [ ! -f "$WORK_DIR/$TOOL" ]; then
-    die "archive does not contain $TOOL at its root" \
+  if [ ! -f "$WORK_DIR/$BIN" ]; then
+    die "archive does not contain $BIN at its root" \
         "the release violates the artifact-shape contract; report at https://github.com/$REPO/issues"
   fi
   mkdir -p "$INSTALL_DIR" \
     || die "could not create $INSTALL_DIR" "pass --install-dir for a writable location"
   # Stage inside the destination dir, then rename: the swap is atomic, and an
   # in-use binary is replaced rather than written through.
-  staging="$INSTALL_DIR/.$TOOL.tmp.$$"
-  if ! mv "$WORK_DIR/$TOOL" "$staging" || ! chmod +x "$staging"; then
+  staging="$INSTALL_DIR/.$BIN.tmp.$$"
+  if ! mv "$WORK_DIR/$BIN" "$staging" || ! chmod +x "$staging"; then
     rm -f "$staging"
     die "could not write to $INSTALL_DIR" "pass --install-dir for a writable location"
   fi
-  if ! mv -f "$staging" "$INSTALL_DIR/$TOOL"; then
+  if ! mv -f "$staging" "$INSTALL_DIR/$BIN"; then
     rm -f "$staging"
     die "could not write to $INSTALL_DIR" "pass --install-dir for a writable location"
   fi
-  log_change "installed: $INSTALL_DIR/$TOOL ($TAG)"
+  log_change "installed: $INSTALL_DIR/$BIN ($TAG)"
 
   if [ "$BIN_ONLY" = 0 ]; then install_extras; fi
 }

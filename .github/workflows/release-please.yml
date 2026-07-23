@@ -89,7 +89,7 @@ jobs:
       issues: write
       id-token: write
       attestations: write
-    uses: rocne/release-ci/.github/workflows/release.yml@v0.1.4
+    uses: rocne/release-ci/.github/workflows/release.yml@v0.1.5
     with:
       version: ${{ needs.release-please.outputs.tag_name }}
       goreleaser_config: .goreleaser/gostow.yaml

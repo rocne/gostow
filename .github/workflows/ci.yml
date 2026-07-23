@@ -132,3 +132,24 @@ jobs:
         run: go test -count=1 -tags oracle ./...
         env:
           GOSTOW_REQUIRE_DOC_TOOLS: "1"
+
+  # Vendored-installer drift check (rocne/release-ci#53, D36): the repo-root
+  # install.sh must stay byte-identical to the pinned release-ci canonical
+  # outside the per-consumer config block. Catches a vendored copy that drifts
+  # from the pipeline (e.g. the cosign verify contract, #52) before a user's
+  # install does. Owned once in release-ci, pinned by tag like the D34 assert.
+  installer-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Fetch the drift assertion from release-ci
+        uses: actions/checkout@v7
+        with:
+          repository: rocne/release-ci
+          ref: v0.1.5
+          path: .release-ci
+          persist-credentials: false
+      - name: Assert the vendored installer has not drifted (D36)
+        run: sh .release-ci/release-dryrun/assert-vendored-installer.sh ./install.sh
